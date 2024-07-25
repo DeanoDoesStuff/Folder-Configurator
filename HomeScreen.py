@@ -11,6 +11,7 @@ from SkuBuilder import SkuBuilder
 
 # Public Objects
 folder_type = " Make"
+make_id = None
 
 class HomeScreen(QMainWindow):
     def __init__(self, root_dir, folder_type, parent=None):
@@ -107,21 +108,45 @@ class HomeScreen(QMainWindow):
         self.update_folder_type(item)
 
     def update_folder_type(self, item):
+        current_sku = ""
         if item:
             depth = self.tree_widget.get_item_depth(item)
+            # New Code for logging selected item ID's
+            item_text = item.text(0)
+
+            # Call SkuBuilder for the given depth
+            id_value, name_value = self.sku_builder.process_depth(item_text, depth)
             if depth == 0:
                 self.folder_type = " Make"
             elif depth == 1:
+                # Added code for setting ID and make value
+                self.make_id = id_value
+                self.make_name = name_value
                 self.folder_type = " Model"
+                current_sku = self.make_id
             elif depth == 2:
+                self.model_id = id_value
+                self.model_name = name_value
                 self.folder_type = " Year"
+                current_sku = f"{self.make_id}{self.model_id}"
+            elif depth == 3:
+                self.year_id = id_value
+                self.year_name = name_value
+                self.folder_type = "SERIES"
+                current_sku = f"{self.make_id}{self.model_id}{self.year_id}"
             else:
                 self.folder_type = " None"
+                current_sku = self.make_id
+            # Update UI elements
+            self.new_folder_input.setPlaceholderText(f"Enter new{self.folder_type}")
+            self.create_folder_button.setEnabled(self.folder_type != " None")
+            # Update SKU label
+            self.update_sku_label(current_sku)
         else:
             self.folder_type = " Make"
-        
-        self.new_folder_input.setPlaceholderText(f"Enter new{self.folder_type}")
-        self.create_folder_button.setEnabled(self.folder_type != " None")
+            self.make_id = "XX"
+            current_sku = self.make_id
+            self.update_sku_label(current_sku)
 
     def create_new_folder(self):
         new_folder_name = self.new_folder_input.text().strip()
@@ -152,6 +177,9 @@ class HomeScreen(QMainWindow):
                     self.tree_widget.refresh_tree()
                 else:
                     QMessageBox.warning(self, "Error", f"Failed to delete folder '{selected_item.text(0)}'. It might not be empty.")
+
+    def update_sku_label(self, sku):
+        self.sku_label.setText(f"Current SKU: {sku}")
 
     def reset_folder_type(self):
         self.update_folder_type(None)
