@@ -1,17 +1,13 @@
 import os
-import sys
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
-                              QLineEdit, QPushButton, QMessageBox, QSplitter, QHBoxLayout)
+from collections import defaultdict
+from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QCheckBox, QLineEdit, QPushButton, 
+                             QMessageBox, QSplitter, QHBoxLayout, QLabel)
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtGui import QIcon
 from FolderManager import FolderManager
 from FolderTree import FolderTree
 from SkuBuilder import SkuBuilder
-
-# Public Objects
-folder_type = " Make"
-make_id = None
+from Utility import load_series_data
 
 class HomeScreen(QMainWindow):
     def __init__(self, root_dir, folder_type, parent=None):
@@ -59,7 +55,7 @@ class HomeScreen(QMainWindow):
         self.left_layout.addWidget(self.new_folder_input)
 
         # Button for creating a new folder
-        self.create_folder_button = QPushButton("Create Folder")
+        self.create_folder_button = QPushButton("Create Folder") # TODO update the button text for folder_type
         self.create_folder_button.clicked.connect(self.create_new_folder)
         self.create_folder_button.setStyleSheet("""
             QPushButton {
@@ -82,7 +78,13 @@ class HomeScreen(QMainWindow):
         # Add left widget to splitter
         self.splitter.addWidget(self.left_widget)
         
-        # Right Widget (for context buttons or other widgets)
+        # Middle Widget for Series options
+        self.middle_widget = QWidget()
+        self.middle_layout = QVBoxLayout()
+        self.middle_widget.setLayout(self.middle_layout)
+        self.splitter.addWidget(self.middle_widget)
+
+        # Right Widget (Nothing here yet, but for testing)
         self.right_widget = QWidget()
         self.right_layout = QVBoxLayout()
         self.right_widget.setLayout(self.right_layout)
@@ -98,54 +100,73 @@ class HomeScreen(QMainWindow):
         # Add right widget to splitter
         self.splitter.addWidget(self.right_widget)
 
+        # Create Series Widget
+        self.series_widget = QWidget()
+        self.series_layout = QVBoxLayout()
+        self.series_widget.setLayout(self.series_layout)
+        self.splitter.addWidget(self.series_widget)
+
         # Set initial sizes for the splitter (optional)
-        self.splitter.setSizes([200, 600])  # Set the initial size for the left and right widgets
+        self.splitter.setSizes([200, 400, 600])  # Set the initial size for the left and right widgets
 
         # Initialize folder type and button state
         self.update_folder_type(self.tree_widget.currentItem())
 
+        # Load and display series buttons
+        self.series_data = load_series_data('Configs/SERIES_CONFIG.csv')  # Updated with the actual path to the CSV file
+        self.load_series_buttons()  # Load series buttons
+
+        # Track the active series button
+        self.active_series_button = None
+
     def handle_tree_item_click(self, item):
         self.update_folder_type(item)
+        depth = self.tree_widget.get_item_depth(item)
+        if depth == 3: # Year is selected
+            self.enable_series_buttons(True)
+        else:
+            self.enable_series_buttons(False)
+
+    def enable_series_buttons(self, enable):
+        for i in range(self.middle_layout.count()):
+            widget = self.middle_layout.itemAt(i).widget()
+            if isinstance(widget, QPushButton):
+                widget.setEnabled(enable)
 
     def update_folder_type(self, item):
         current_sku = ""
         if item:
             depth = self.tree_widget.get_item_depth(item)
-            # New Code for logging selected item ID's
-            item_text = item.text(0)
 
             # Call SkuBuilder for the given depth
-            id_value, name_value = self.sku_builder.process_depth(item_text, depth)
-            if depth == 0:
+            make_id, model_id, year_id = self.sku_builder.process_depth(item, depth)
+            if depth == 0: # Nothing is selected SKU is NULL
                 self.folder_type = " Make"
             elif depth == 1:
-                # Added code for setting ID and make value
-                self.make_id = id_value
-                self.make_name = name_value
                 self.folder_type = " Model"
-                current_sku = self.make_id
+                # Make or deeper has been selected Make ID extracted
+                current_sku = make_id
             elif depth == 2:
-                self.model_id = id_value
-                self.model_name = name_value
                 self.folder_type = " Year"
-                current_sku = f"{self.make_id}{self.model_id}"
+                # Model or deeper has been selected Make and Model ID extracted
+                current_sku = make_id + model_id
             elif depth == 3:
-                self.year_id = id_value
-                self.year_name = name_value
-                self.folder_type = "SERIES"
-                current_sku = f"{self.make_id}{self.model_id}{self.year_id}"
+                self.folder_type = " SERIES"
+                # Year has been selected, all MMY SKU ID's have been extracted
+                current_sku = make_id + model_id + year_id
             else:
                 self.folder_type = " None"
-                current_sku = self.make_id
+                current_sku = self.make_id # Base SKU
             # Update UI elements
-            self.new_folder_input.setPlaceholderText(f"Enter new{self.folder_type}")
+            if depth < 3:
+                # Set placeholder text if make or model depth selected
+                self.new_folder_input.setPlaceholderText(f"Enter new{self.folder_type}")
+            else:
+                # Empty Text if year is selected
+                self.new_folder_input.setPlaceholderText("")
             self.create_folder_button.setEnabled(self.folder_type != " None")
+            self.create_folder_button.setEnabled(self.folder_type != " SERIES")
             # Update SKU label
-            self.update_sku_label(current_sku)
-        else:
-            self.folder_type = " Make"
-            self.make_id = "XX"
-            current_sku = self.make_id
             self.update_sku_label(current_sku)
 
     def create_new_folder(self):
@@ -183,13 +204,27 @@ class HomeScreen(QMainWindow):
 
     def reset_folder_type(self):
         self.update_folder_type(None)
+    
+    def load_series_buttons(self):
+        for series in self.series_data:
+            button = QPushButton(series)
+            button.clicked.connect(self.handle_series_button_click)
+            self.middle_layout.addWidget(button)
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    # Root directory for home screen
-    root_dir = "C://Instructions Gen 4"
-    home_screen = HomeScreen(root_dir, folder_type)
-    home_screen.show()
+    def handle_series_button_click(self):
+        sender = self.sender()
+        series = sender.text()
 
-    sys.exit(app.exec_())
+        # Clear any existing checkboxes
+        for i in reversed(range(self.middle_layout.count())):
+            widget = self.middle_layout.itemAt(i).widget()
+            if isinstance(widget, QCheckBox):
+                self.middle_layout.removeWidget(widget)
+                widget.deleteLater()
 
+        # Add new checkboxes based on unique CSV data for the selected series
+        if series in self.series_data:
+            for category, values in self.series_data[series].items():
+                for value in values:
+                    checkbox = QCheckBox(f"{category}: {value}")
+                    self.middle_layout.addWidget(checkbox)
