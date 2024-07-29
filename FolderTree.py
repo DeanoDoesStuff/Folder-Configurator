@@ -1,5 +1,6 @@
 import os
-from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QMenu, QInputDialog, QMessageBox, QLineEdit
+from PyQt5.QtWidgets import (QTreeWidget, QTreeWidgetItem, QMenu, QInputDialog, QMessageBox,
+                              QLineEdit, QTreeWidgetItemIterator)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSignal, Qt
 
@@ -70,3 +71,37 @@ class FolderTree(QTreeWidget):
         if item is None:
             # Emit custom signal to notify empty space click
             self.empty_space_clicked.emit()
+
+    def save_expanded_state(self):
+        expanded_items = []
+        iterator = QTreeWidgetItemIterator(self)
+        while iterator.value():
+            item = iterator.value()
+            if item.isExpanded():
+                expanded_items.append(self.get_item_path(item))
+            iterator += 1
+        return expanded_items
+    
+    def restore_expanded_state(self, expanded_items):
+        iterator = QTreeWidgetItemIterator(self)
+        while iterator.value():
+            item = iterator.value()
+            if self.get_item_path(item) in expanded_items:
+                item.setExpanded(True)
+            iterator += 1
+    
+    def save_selected_item(self):
+        selected_items = self.selectedItems()
+        if selected_items:
+            return self.get_item_path(selected_items[0])
+        return None
+    
+    def restore_selected_item(self, selected_item_path):
+        if selected_item_path:
+            iterator = QTreeWidgetItemIterator(self)
+            while iterator.value():
+                item = iterator.value()
+                if self.get_item_path(item) == selected_item_path:
+                    self.setCurrentItem(item)
+                    break
+                iterator += 1
