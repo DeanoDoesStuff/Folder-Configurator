@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QCheckBox, QLineEdit, QPushButton, 
-                             QMessageBox, QSplitter, QHBoxLayout, QLabel)
+                            QMessageBox, QSplitter, QHBoxLayout, QLabel)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from FolderManager import FolderManager
@@ -51,6 +51,7 @@ class HomeScreen(QMainWindow):
         
         # Input for a new folder
         self.new_folder_input = QLineEdit()
+        print("Folder Type: ", folder_type)
         self.new_folder_input.setPlaceholderText(f"Enter new {self.folder_type}")
         self.left_layout.addWidget(self.new_folder_input)
 
@@ -126,12 +127,15 @@ class HomeScreen(QMainWindow):
             self.enable_series_buttons(True)
         else:
             self.enable_series_buttons(False)
+            # Reset active series buttons when no year is selected
+            if self.active_series_button:
+                self.active_series_button.setStyleSheet("background-color: grey; color: white")
+                self.active_series_button = None
 
     def enable_series_buttons(self, enable):
-        for i in range(self.middle_layout.count()):
-            widget = self.middle_layout.itemAt(i).widget()
-            if isinstance(widget, QPushButton):
-                widget.setEnabled(enable)
+        for button in self.series_buttons:
+            button.setEnabled(enable)
+            button.setVisible(enable)
 
     def update_folder_type(self, item):
         current_sku = ""
@@ -179,10 +183,15 @@ class HomeScreen(QMainWindow):
                 parent_path = self.root_dir
             
             new_folder_path = os.path.join(parent_path, new_folder_name)
+
+            expanded_state = self.tree_widget.save_expanded_state()
+            selected_item_path = self.tree_widget.save_selected_item()
             if self.folder_manager.create_folder(new_folder_path):
                 self.new_folder_input.clear()
                 QMessageBox.information(self, "Success", f"Folder '{new_folder_name}' created successfully.")
                 self.tree_widget.refresh_tree()
+                self.tree_widget.restore_expanded_state(expanded_state)
+                self.tree_widget.restore_selected_item(selected_item_path)
             else:
                 QMessageBox.information(self, "Warning", f"Folder '{new_folder_name}' already exists.")
 
@@ -196,6 +205,9 @@ class HomeScreen(QMainWindow):
                 if self.folder_manager.delete_folder(folder_path):
                     QMessageBox.information(self, "Success", f"Folder '{selected_item.text(0)}' deleted successfully.")
                     self.tree_widget.refresh_tree()
+                    # Reset folder tree selections and collapse it
+                    self.tree_widget.collapseAll()
+                    self.tree_widget.clearSelection()
                 else:
                     QMessageBox.warning(self, "Error", f"Failed to delete folder '{selected_item.text(0)}'. It might not be empty.")
 
@@ -203,17 +215,77 @@ class HomeScreen(QMainWindow):
         self.sku_label.setText(f"Current SKU: {sku}")
 
     def reset_folder_type(self):
-        self.update_folder_type(None)
+        print("Folder type reset: ")
+        self.folder_type = " Make"
+        self.new_folder_input.setPlaceholderText(f"Enter new {self.folder_type}")
+        self.create_folder_button.setEnabled(True)
+        self.update_sku_label("")
+        self.enable_series_buttons(False)
+        # Ensure folder tree is updated
+        self.tree_widget.refresh_tree()
     
-    def load_series_buttons(self):
+    def load_series_buttons(self): # TODO finish checkbox state check and folder creation
+        self.series_buttons = []
+        # Create dictionary for checkbox state referencing
+        self.series_checkboxes = defaultdict(list)
+        self.catagory_order = list(self.series_data.keys())
+
+        # Create Series buttons and update visual state for active button
         for series in self.series_data:
             button = QPushButton(series)
+            button.setStyleSheet("background-color: #FF474C ; color: white;")  # Initial color if no series folder exists
+            button.setEnabled(False) # Initially disable series buttons
+            button.setVisible(False) # Initially hide series buttons
             button.clicked.connect(self.handle_series_button_click)
             self.middle_layout.addWidget(button)
+            self.series_buttons.append(button) # Store series button in a list for access later
+
+        # Create checkboxes for each unique category
+        for i, category in enumerate(self.catagory_order):
+            label = QLabel(category)
+            self.series_layout.addWidget(label)
+
+            for value in self.series_data[category]:
+                checkbox = QCheckBox(value)
+                checkbox.stateChanged.connect(lambda state, cat=category, val=value: self.handle_checkbox_selection(cat, val, state))
+                self.series_layout.addWidget(checkbox)
+                self.series_checkboxes[category].append(checkbox)
+        
+        # Initially disable checkboxes for all categories except the location
+        if i != 0:
+            self.enable_checkboxes_for_category(category, False)
+
+    # Pass category data to enable the next set of checkboxes 
+    def enable_checkboxes_for_category(self, category, enable):
+        for checkbox in self.series_checkboxes[category]:
+            checkbox.setEnabled(enable)
+
+    def handle_checkbox_selection(self, category, value, state):
+        category_idex = self.catagory_order.index(category)
+
+        # Enable next category checkboxes if previous checkboxes are selected
+        if state == Qt.Checked:
+            if category_idex < len(self.catagory_order) -1:
+                print("Reducing category index count")
+                next_category = self.catagory_order[category_idex + 1]
+                self.enable_checkboxes_for_category(next_category, True)
+        else:
+            # Disables next category if no category is currently selected
+            if not any(checkbox.isChecked() for checkbox in self.series_checkboxes[category]):
+                next_category = self.category_order[category_idex + 1]
+                self.enable_checkboxes_for_category(next_category, False)
 
     def handle_series_button_click(self):
         sender = self.sender()
         series = sender.text()
+
+        # Revert the previously active series button to grey
+        if self.active_series_button:
+            self.active_series_button.setStyleSheet("background-color: #83f28f; color: black;")
+
+        # Set the newly clicked button to green
+        sender.setStyleSheet("background-color: green; color: white;")
+        self.active_series_button = sender
 
         # Clear any existing checkboxes
         for i in reversed(range(self.middle_layout.count())):
