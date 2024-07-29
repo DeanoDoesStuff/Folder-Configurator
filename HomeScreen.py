@@ -123,14 +123,30 @@ class HomeScreen(QMainWindow):
     def handle_tree_item_click(self, item):
         self.update_folder_type(item)
         depth = self.tree_widget.get_item_depth(item)
-        if depth == 3: # Year is selected
+        if depth >= 3: # Year or deeper is selected
             self.enable_series_buttons(True)
+            self.update_series_button_states(item)
         else:
             self.enable_series_buttons(False)
             # Reset active series buttons when no year is selected
             if self.active_series_button:
                 self.active_series_button.setStyleSheet("background-color: grey; color: white")
                 self.active_series_button = None
+
+    def update_series_button_states(self, year_item):
+        year_path = self.tree_widget.get_item_path(year_item)
+        for button in self.series_buttons:
+            series_folder_path = os.path.join(year_path, button.text())
+            if os.path.exists(series_folder_path):
+                button.setStyleSheet("background-color: lightgreen; color: black;")
+            else:
+                button.setStyleSheet("background-color: red; color: white;")
+        if self.active_series_button:
+            self.highlight_active_series_button()
+    
+    def highlight_active_series_button(self):
+        if self.active_series_button:
+            self.active_series_button.setStyleSheet("background-color: green; color: white;")
 
     def enable_series_buttons(self, enable):
         for button in self.series_buttons:
@@ -143,7 +159,7 @@ class HomeScreen(QMainWindow):
             depth = self.tree_widget.get_item_depth(item)
 
             # Call SkuBuilder for the given depth
-            make_id, model_id, year_id = self.sku_builder.process_depth(item, depth)
+            make_id, model_id, year_id, series_id = self.sku_builder.process_depth(item, depth)
             if depth == 0: # Nothing is selected SKU is NULL
                 self.folder_type = " Make"
             elif depth == 1:
@@ -158,6 +174,10 @@ class HomeScreen(QMainWindow):
                 self.folder_type = " SERIES"
                 # Year has been selected, all MMY SKU ID's have been extracted
                 current_sku = make_id + model_id + year_id
+            elif depth == 4:
+                # Series has been selected, update SKU
+                self.folder_type = " LOCATION"
+                current_sku = make_id + model_id + year_id + series_id
             else:
                 self.folder_type = " None"
                 current_sku = self.make_id # Base SKU
@@ -189,9 +209,10 @@ class HomeScreen(QMainWindow):
             if self.folder_manager.create_folder(new_folder_path):
                 self.new_folder_input.clear()
                 QMessageBox.information(self, "Success", f"Folder '{new_folder_name}' created successfully.")
-                self.tree_widget.refresh_tree()
+                
                 self.tree_widget.restore_expanded_state(expanded_state)
                 self.tree_widget.restore_selected_item(selected_item_path)
+                self.tree_widget.refresh_tree()
             else:
                 QMessageBox.information(self, "Warning", f"Folder '{new_folder_name}' already exists.")
 
@@ -254,6 +275,7 @@ class HomeScreen(QMainWindow):
         # Initially disable checkboxes for all categories except the location
         if i != 0:
             self.enable_checkboxes_for_category(category, False)
+    
 
     # Pass category data to enable the next set of checkboxes 
     def enable_checkboxes_for_category(self, category, enable):
@@ -279,24 +301,40 @@ class HomeScreen(QMainWindow):
         sender = self.sender()
         series = sender.text()
 
-        # Revert the previously active series button to grey
-        if self.active_series_button:
-            self.active_series_button.setStyleSheet("background-color: #83f28f; color: black;")
+        selected_item = self.tree_widget.currentItem()
+        if not selected_item or self.tree_widget.get_item_depth(selected_item) != 3:
+            QMessageBox.warning(self, "Error", "Please select a year folder to create a Series.")
+            return
 
-        # Set the newly clicked button to green
+        parent_path = self.tree_widget.get_item_path(selected_item)
+        new_folder_path = os.path.join(parent_path, series)
+
+        if not os.path.exists(new_folder_path):
+            if self.folder_manager.create_folder(new_folder_path):
+                QMessageBox.information(self, "Success", f"Series folder '{series}' created successfully.")
+                self.tree_widget.expandItem(selected_item) # Ensure the newly created folder is visible
+                sender.setStyleSheet("background-color: lightgreen; color: black;")  # Change to light green
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to create series folder '{series}'.")
+
+        # Change the color of the active button
+        if self.active_series_button:
+            self.active_series_button.setStyleSheet("background-color: lightgreen; color: black;")
         sender.setStyleSheet("background-color: green; color: white;")
         self.active_series_button = sender
 
+        """
         # Clear any existing checkboxes
         for i in reversed(range(self.middle_layout.count())):
             widget = self.middle_layout.itemAt(i).widget()
             if isinstance(widget, QCheckBox):
                 self.middle_layout.removeWidget(widget)
                 widget.deleteLater()
-
+        
         # Add new checkboxes based on unique CSV data for the selected series
         if series in self.series_data:
             for category, values in self.series_data[series].items():
                 for value in values:
                     checkbox = QCheckBox(f"{category}: {value}")
                     self.middle_layout.addWidget(checkbox)
+        """
