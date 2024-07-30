@@ -25,7 +25,6 @@ def load_series_data(csv_path):
                 series_data[series]['FABRICATION'].add(fabrication)
                 series_data[series]['MATERIAL'].add(material)
                 series_data[series]['PACKAGE'].add(package)
-
     except Exception as e:
         print(f"Error reading CSV file: {e}")
     return series_data

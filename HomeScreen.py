@@ -136,14 +136,17 @@ class HomeScreen(QMainWindow):
     def update_series_button_states(self, year_item):
         year_path = self.tree_widget.get_item_path(year_item)
         for button in self.series_buttons:
-            series_folder_path = os.path.join(year_path, button.text())
+            series = button.text()
+            series_folder_path = os.path.join(year_path, series)
             if os.path.exists(series_folder_path):
                 button.setStyleSheet("background-color: lightgreen; color: black;")
+                button.setEnabled(True)
             else:
                 button.setStyleSheet("background-color: red; color: white;")
+                button.setEnabled(False)
         if self.active_series_button:
             self.highlight_active_series_button()
-    
+            
     def highlight_active_series_button(self):
         if self.active_series_button:
             self.active_series_button.setStyleSheet("background-color: green; color: white;")
@@ -247,13 +250,11 @@ class HomeScreen(QMainWindow):
     
     def load_series_buttons(self): # TODO finish checkbox state check and folder creation
         self.series_buttons = []
-        # Create dictionary for checkbox state referencing
-        self.series_checkboxes = defaultdict(list)
-        self.catagory_order = list(self.series_data.keys())
+        self.series_labels = {}
 
         # Create Series buttons and update visual state for active button
         for series in self.series_data:
-            button = QPushButton(series)
+            button = QPushButton(series) # Creates series button
             button.setStyleSheet("background-color: #FF474C ; color: white;")  # Initial color if no series folder exists
             button.setEnabled(False) # Initially disable series buttons
             button.setVisible(False) # Initially hide series buttons
@@ -261,41 +262,34 @@ class HomeScreen(QMainWindow):
             self.middle_layout.addWidget(button)
             self.series_buttons.append(button) # Store series button in a list for access later
 
-        # Create checkboxes for each unique category
-        for i, category in enumerate(self.catagory_order):
-            label = QLabel(category)
-            self.series_layout.addWidget(label)
+            # Create a horizontal layour for headers
+            headers_layout = QHBoxLayout()
 
-            for value in self.series_data[category]:
-                checkbox = QCheckBox(value)
-                checkbox.stateChanged.connect(lambda state, cat=category, val=value: self.handle_checkbox_selection(cat, val, state))
-                self.series_layout.addWidget(checkbox)
-                self.series_checkboxes[category].append(checkbox)
-        
-        # Initially disable checkboxes for all categories except the location
-        if i != 0:
-            self.enable_checkboxes_for_category(category, False)
-    
+            # Create a QLabel for the location headers
+            location_label = QLabel("LOCATION")
+            location_label.setVisible(True) # Always visible
+            headers_layout.addWidget(location_label)
 
-    # Pass category data to enable the next set of checkboxes 
-    def enable_checkboxes_for_category(self, category, enable):
-        for checkbox in self.series_checkboxes[category]:
-            checkbox.setEnabled(enable)
+            # Create a QLabel for the fabrication headers
+            fabrication_label = QLabel("FABRICATION")
+            fabrication_label.setVisible(True) # Always visible
+            headers_layout.addWidget(fabrication_label)
 
-    def handle_checkbox_selection(self, category, value, state):
-        category_idex = self.catagory_order.index(category)
+            # Create a QLabel for the material headers
+            material_label = QLabel("MATERIAL")
+            material_label.setVisible(True) # Always visible
+            headers_layout.addWidget(material_label)
 
-        # Enable next category checkboxes if previous checkboxes are selected
-        if state == Qt.Checked:
-            if category_idex < len(self.catagory_order) -1:
-                print("Reducing category index count")
-                next_category = self.catagory_order[category_idex + 1]
-                self.enable_checkboxes_for_category(next_category, True)
-        else:
-            # Disables next category if no category is currently selected
-            if not any(checkbox.isChecked() for checkbox in self.series_checkboxes[category]):
-                next_category = self.category_order[category_idex + 1]
-                self.enable_checkboxes_for_category(next_category, False)
+            # Create a QLabel for the package headers
+            package_label = QLabel("PACKAGE")
+            package_label.setVisible(True) # Always visible
+            headers_layout.addWidget(package_label)
+
+            # Add the horizontal layout to the middle layout
+            self.middle_layout.addLayout(headers_layout)
+            # Store location labels in dictionary
+            self.series_labels[series] = (location_label, fabrication_label, material_label, package_label)
+            
 
     def handle_series_button_click(self):
         sender = self.sender()
@@ -322,19 +316,3 @@ class HomeScreen(QMainWindow):
             self.active_series_button.setStyleSheet("background-color: lightgreen; color: black;")
         sender.setStyleSheet("background-color: green; color: white;")
         self.active_series_button = sender
-
-        """
-        # Clear any existing checkboxes
-        for i in reversed(range(self.middle_layout.count())):
-            widget = self.middle_layout.itemAt(i).widget()
-            if isinstance(widget, QCheckBox):
-                self.middle_layout.removeWidget(widget)
-                widget.deleteLater()
-        
-        # Add new checkboxes based on unique CSV data for the selected series
-        if series in self.series_data:
-            for category, values in self.series_data[series].items():
-                for value in values:
-                    checkbox = QCheckBox(f"{category}: {value}")
-                    self.middle_layout.addWidget(checkbox)
-        """
