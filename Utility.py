@@ -1,6 +1,7 @@
 import csv
 from collections import defaultdict
 
+# Handles SERIES_CONFIG.csv file data
 def load_series_data(csv_path):
     series_data = defaultdict(lambda: defaultdict(set))  # Store unique values in sets
     try:
