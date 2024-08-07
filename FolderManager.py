@@ -1,5 +1,5 @@
+#FolderManager.py
 import os
-from PyQt5.QtWidgets import QMessageBox
 
 # Covers helper functions for CRUD of folders
 class FolderManager:
