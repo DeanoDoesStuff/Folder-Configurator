@@ -1,3 +1,4 @@
+#FolderTree.py
 import os
 from PyQt5.QtWidgets import (QTreeWidget, QTreeWidgetItem, QMenu, QInputDialog, QMessageBox,
                               QLineEdit, QTreeWidgetItemIterator)
@@ -7,21 +8,30 @@ from PyQt5.QtCore import pyqtSignal, Qt
 # Covers functions for handling Tree processes
 class FolderTree(QTreeWidget):
     # Define a custom signal
+    item_clicked = pyqtSignal(QTreeWidgetItem)
     empty_space_clicked = pyqtSignal()
+
     def __init__(self, root_dir, folder_manager, series_manager, parent=None):
         super().__init__(parent)
         self.root_dir = root_dir
         self.folder_manager = folder_manager
+        self.series_manager = series_manager
         self.setHeaderLabel("Folder Structure")
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.open_context_menu)
         self.refresh_tree()
+        self.itemClicked.connect(self.on_item_clicked)
+
+    # Handle sending signal when tree item is clicked
+    def on_item_clicked(self, item, column):
+        self.item_clicked.emit(item)
 
     # Handles loading folder structure into Tree Widget
     def load_folder_structure(self, startpath, tree):
         for element in os.listdir(startpath): # Loop through directory at startpath
             path_info = os.path.join(startpath, element)
             parent_item = QTreeWidgetItem(tree, [os.path.basename(element)])
+            parent_item.setData(0, Qt.UserRole, path_info)  # Set the path as data
             if os.path.isdir(path_info):
                 self.load_folder_structure(path_info, parent_item)
                 # Default icon, this can be changed to custom asset for each element in Tree
@@ -115,7 +125,7 @@ class FolderTree(QTreeWidget):
             return self.get_item_path(selected_items[0])
         return None
     
-    # Handles ?
+    # Handles restoration of the selected item
     def restore_selected_item(self, selected_item_path):
         if selected_item_path:
             iterator = QTreeWidgetItemIterator(self)
