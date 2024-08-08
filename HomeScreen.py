@@ -72,7 +72,9 @@ class HomeScreen(QMainWindow):
             series_buttons = self.series_buttons, 
             series_data = self.series_data, 
             series_labels = self.series_labels, 
-            series_checkboxes = self.series_checkboxes, 
+            series_checkboxes = self.series_checkboxes,
+            # Add Folder Manager
+            folder_manager = self.folder_manager,
             current_mmy_path=""
         )
         
@@ -279,6 +281,8 @@ class HomeScreen(QMainWindow):
                     checkbox.setVisible(True)
                     checkbox_layout.addWidget(checkbox)
                     checkboxes.append(checkbox)
+                    # TODO ensure checkbox click logic emits correctly
+                    checkbox.clicked.connect(self.handle_checkbox_click)
                 
                 headers_layout.addLayout(checkbox_layout)
                 self.series_labels[header] = header_label
@@ -305,6 +309,9 @@ class HomeScreen(QMainWindow):
         parent_path = self.tree_widget.get_item_path(selected_item)
         print(f"Parent path: {parent_path}")
 
+        # TODO new function implementation for Kit sku bundles
+        self.series_manager.create_bundle(series)
+        return # temp kill processes after new bundle code added.
         item_depth = self.tree_widget.get_item_depth(selected_item) # Get selected item depth from Tree
         print("Selected Item Depth: ", item_depth)
         
@@ -336,8 +343,18 @@ class HomeScreen(QMainWindow):
         for series in self.series_data.keys():
             if series in self.series_labels:
                 headers = self.series_labels[series]
-                for header, label in headers.items():
-                    label.setVisible(True)
-                    checkboxes = self.series_checkboxes[series][header]
-                    for checkbox in checkboxes:
-                        checkbox.setVisible(True)
+                self.checkbox_visibility(headers, series)
+
+    # Handles when checkboxes are visible in middle layout window
+    def checkbox_visibility(self, headers, series):
+        for header, label in headers.items():
+            label.setVisible(True)
+            checkboxes = self.series_checkboxes[series][header]
+            for checkbox in checkboxes:
+                checkbox.setVisible(True)
+
+    def handle_checkbox_click(self):
+        clicked_box = self.sender()
+        active_checkbox = clicked_box.text()
+        print("Clicked Checkbox: ", active_checkbox)
+        checkbox_status = self.series_manager.handle_checkbox(active_checkbox)
