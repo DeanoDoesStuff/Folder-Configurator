@@ -1,16 +1,17 @@
 # SeriesManager.py
 from collections import defaultdict
 import os
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QCheckBox, QMessageBox
+from PyQt5.QtWidgets import QLabel, QVBoxLayout, QMessageBox
 from FolderManager import FolderManager
 from Utility import load_series_data
 
 
 class SeriesManager:
-    def __init__(self, root_dir, series_buttons, series_data, series_labels,
+    def __init__(self, root_dir, series_buttons, child_buttons, series_data, series_labels,
                   series_checkboxes, current_mmy_path, folder_manager):
         self.root_dir = root_dir
         self.series_buttons = series_buttons
+        self.child_buttons = child_buttons
         self.series_data = series_data
         self.series_labels = series_labels
         self.series_checkboxes = series_checkboxes
@@ -19,123 +20,56 @@ class SeriesManager:
 
     # Handles logic for enabling series buttons when conditions are met
     def enable_series_buttons(self, enable, current_mmy_path=None):
+        print("Enable Series buttons: ")
         if enable and current_mmy_path:
             self.current_mmy_path = current_mmy_path
+            print("Current MMY Path: ", current_mmy_path)
             for button in self.series_buttons:
                 button.setVisible(True)
                 button.setEnabled(True)
         else:
+            print("No button available to enable")
             for button in self.series_buttons:
                 button.setVisible(False)
                 button.setEnabled(False)
             self.current_mmy_path = ""
-    
-    # Handles if signal from Tree contains a Series and updates the active series buttons
-    def update_active_series(self, item, current_mmy_path=None):
-        if item:
-            print("Current active Series Path: ", current_mmy_path)
-            parts = current_mmy_path.split("\\")
-            active_series = parts[-1]
-            print("Active Series: ", active_series)
-            for button in self.series_buttons:
-                parts = current_mmy_path.split("\\")
-                series_path = "\\".join(parts[:-1])
-                series_path = os.path.join(series_path, button.text())
-                print("Series Path: ", series_path)
-                print("Button Series: ", button.text())
-
-                if button.text() == active_series:
-                    button.setStyleSheet("background-color: #2E982B; color: white") # Active button, Green
-                elif os.path.exists(series_path):
-                    print("Folder found, setting Button Style to Inactive but passive")
-                    button.setStyleSheet("background-color: #0B8ED4; color: white") # Exists, marked blue
-                    # Update header styles
-                    self.update_headers(series_path)
-                else:
-                    print("No folder found, setting inactive and off.")
-                    # Set folder status based on if it's inactive and doesn't exist
-                    button.setStyleSheet("background-color: #C63F3F; color: white") # Doesn't exists, Red
-
+     
     # Handles series button updates
     def update_series_button_states(self, item):
-        # TODO make seperate case for when signal from Tree is deeper than 4
-        """
-        BUG if depth 4 or more selected in Tree, 
-        path strings are adding current active selection plus looped series values
-        """  
-        # This loop runs when signal from Tree comes from depth 3 (year)
         if item:
             for button in self.series_buttons:
                 series_path = os.path.join(self.current_mmy_path, button.text())
-                print("Updating series button at: ", series_path)
                 if os.path.exists(series_path):
-                    button.setStyleSheet("background-color: #0B8ED4; color: white")
-                    self.update_headers(series_path)
+                    button.setStyleSheet("background-color: #0B8ED4; color: white") # Folder exists, button is blue
+                    parent_button = button
+                    parent_state = "blue"
+                    self.update_child_button_states(parent_button, parent_state)
                 else:
-                    button.setStyleSheet("background-color: #C63F3F; color: white")
+                    button.setStyleSheet("background-color: #C63F3F; color: white") # Folder doesn't exist, button is red
+                    parent_button = button
+                    parent_state = "red"
+                    self.update_child_button_states(parent_button, parent_state)
         else:
             pass
-
-    def update_checkbox_states(self, series_path, header, checkboxes):
-        """
-        Update checkbox state for each location based on whether the folder exists
-        """
-        print("\nUpdating checkbox state")
-        for checkbox in checkboxes:
-            location_folder = os.path.join(series_path, checkbox.text())
-            print("Location Folder: ", location_folder)
-            if os.path.exists(location_folder):
-                checkbox.setChecked(True)
-                print(f"Check for {checkbox.text()} checked (Folder exists).")
-            else:
-                checkbox.setChecked(False)
-                print(f"Checkbox for {checkbox.text()} not checked (Folder does not exist)")
-
-
-    def update_headers(self, series_path):
-        """
-        Update headers visibility and checkboxes based on the series path.
-        """
-        for header, checkboxes in self.series_checkboxes.items():
-            print(f"Updating header: {header}")
-            self.update_checkbox_states(series_path, header, checkboxes)
-
-
-    def header_styles(header):
-        print("Header Style: ", header)
-        # TODO check if KIT sku folder exists and set header style
-        # Base style
-        if header:
-            style = """
-                background-color: #3b3b3b;
-                color: white;
-                padding: 2px 5px;
-                border: 1px solid #d0d0d0;
-            """
-        else:
-            # Active label style
-            active_style = """
-                background-color: #2E982B;
-                color: white;
-                padding: 2px 5px;
-                border: 1px solid #d0d0d0;
-            """
-            style = active_style
-        return style
-
-    # Handles checking checkbox folder status and creates new folder if needed
-    def handle_checkbox(self, active_checkbox):
-        print(f"\nHandle Checkbox Logic for: {active_checkbox}")
-        # TODO pass in currently selected checkbox and create a folder for that box if none exists
-        checkbox_path = os.path.join(self.current_mmy_path, active_checkbox)
-        if not os.path.exists(checkbox_path):
-            if self.folder_manager.create_folder(checkbox_path):
-                print("Created Folder: ", checkbox_path)           
-        else:
-            print(f"Folder {active_checkbox} will be deleted")
-            if self.folder_manager.delete_folder(checkbox_path):
-                print("Deleted Folder: ", checkbox_path)
     
+    # Handle enableing child buttons states when conditions are met
+    def enable_child_states(self):
+        for button in self.child_buttons:
+            button.setVisible(True)
+            button.setEnabled(True)
+    
+    # Handles updates to the buttons states for Series Child buttons
+    def update_child_button_states(self, parent_button, parent_state):
+        print("Child Buttons: ", self.child_buttons)
+        for child_button in self.child_buttons:
+            if parent_state == "blue":
+                child_button.setStyleSheet("background-color: #C63F3F; color: white") # Set to Red
+            elif parent_state == "red":
+                child_button.setStyleSheet("background-color: #9C9C9C; color: white") # Set to Grey
+            else:
+                child_button.setStyleSheet("background-color: #9C9C9C; color: white") # Default Set to Grey
+
+
     # TODO new function added to replace checkbox functions and create folders for Kit Skus in bundles
     def create_bundle(self, series):
         if not self.current_mmy_path:
@@ -190,12 +124,6 @@ class SeriesManager:
             package_path = os.path.join(base_folder_path, location, fabrication, material, package)
             print("Package Path: ", package_path)
             self.create_package_folder(package_path, base_folder_path, location, fabrication, material, package)
-
-        """Construct the folder path based on the provided parameters."""
-        # print("Base Folder Path: ", base_folder_path)
-        # kit_sku_path = os.path.join(base_folder_path, "Text")
-        # print("Kit Sku Path: ", kit_sku_path)
-    
 
         # gets called after full Kit sku package has been built and creates folders
     def create_package_folder(self, package_path, base_folder_path, location, fabrication, material, package, series_data):

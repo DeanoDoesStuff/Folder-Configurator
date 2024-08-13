@@ -1,12 +1,13 @@
 #HomeScreen.py
 import os
-from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QCheckBox,
+from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton,
                              QMessageBox, QSplitter, QHBoxLayout, QLabel, QScrollArea)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from FolderManager import FolderManager
 from FolderTree import FolderTree
 from SkuBuilder import SkuBuilder
+
 from SeriesManager import SeriesManager
 from Utility import load_series_data
 
@@ -62,23 +63,27 @@ class HomeScreen(QMainWindow):
 
         # Load series data from CSV file
         self.series_data = load_series_data('Configs/SERIES_CONFIG.csv')
+
+
         
         # Initialize SeriesManager
         self.series_buttons = []
+        self.child_buttons = []
         self.series_labels = {}
         self.series_checkboxes = {}
         self.series_manager = SeriesManager(
             root_dir = self.root_dir, 
-            series_buttons = self.series_buttons, 
-            series_data = self.series_data, 
+            series_buttons = self.series_buttons,
+            child_buttons = self.child_buttons,
+            series_data = self.series_data,
             series_labels = self.series_labels, 
             series_checkboxes = self.series_checkboxes,
             # Add Folder Manager
             folder_manager = self.folder_manager,
             current_mmy_path=""
         )
-        
-        # Load and display series buttons
+
+                # Load and display series buttons
         self.load_series_buttons()  # Load series buttons
 
         # Tree Widget
@@ -131,6 +136,7 @@ class HomeScreen(QMainWindow):
 
         # Track the active series button
         self.active_series_button = None
+        
 
     # Handles signals from items clicked in Folder Tree
     def handle_tree_item_click(self, item):
@@ -138,17 +144,16 @@ class HomeScreen(QMainWindow):
         depth = self.tree_widget.get_item_depth(item)
         if depth == 3:
             current_mmy_path = self.tree_widget.get_item_path(item)
+            print("Current Path: ", current_mmy_path)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
             self.series_manager.update_series_button_states(item)
-            self.update_header_visibility()
 
         elif depth > 3:
             current_mmy_path = self.tree_widget.get_item_path(item)
             print("Current Tree Item Path: ", current_mmy_path)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
-            self.series_manager.update_active_series(item, current_mmy_path)
-            self.update_header_visibility()
-
+            self.series_manager.update_series_button_states(item)
+            #self.series_manager.update_active_series(item, current_mmy_path)
         return depth
 
     # Handles tracking of selected folder type by calculating depth
@@ -157,7 +162,7 @@ class HomeScreen(QMainWindow):
         if item:
             depth = self.tree_widget.get_item_depth(item)
 
-            (make_id, model_id, year_id, series_id,
+            (make_id, model_id, year_id, series_id, location_id,
               fab_id, mat_id, package_id) = self.sku_builder.process_depth(item, depth)
             if depth == 0:
                 self.folder_type = " Make"
@@ -175,13 +180,16 @@ class HomeScreen(QMainWindow):
                 current_sku = make_id + model_id + year_id + series_id
             elif depth ==5:
                 self.folder_type = " FABRICATION"
-                current_sku = make_id + model_id + year_id + series_id + fab_id
+                current_sku = make_id + model_id + year_id + series_id + location_id
             elif depth ==6:
                 self.folder_type = " MATERIAL"
-                current_sku = make_id + model_id + year_id + series_id + fab_id + mat_id
+                current_sku = make_id + model_id + year_id + series_id + location_id + fab_id
             elif depth == 7:
                 self.folder_type = " PACKAGE"
-                current_sku = make_id + model_id + year_id + series_id + fab_id + mat_id + package_id
+                current_sku = make_id + model_id + year_id + series_id + location_id + fab_id + mat_id
+            elif depth == 8:
+                self.folder_type = " Full SKU"
+                current_sku = make_id + model_id + year_id + series_id + location_id + fab_id + mat_id + package_id
             else:
                 self.folder_type = " None"
                 current_sku = self.make_id
@@ -250,65 +258,96 @@ class HomeScreen(QMainWindow):
     # Handles the loading of series and children objects for KIT skus
     def load_series_buttons(self):
         self.series_buttons = []
-        self.series_labels = {}
-        self.series_checkboxes = {}
-
-        series_keys = list(self.series_data.keys())
-
-        for series in series_keys:
-            print(f"Series {series} added to button")
-            button = QPushButton(series)
-            button.setStyleSheet("background-color: #C63F3F; color: white;")
-            button.setEnabled(False)
-            button.setVisible(False)
-            button.clicked.connect(self.handle_series_button_click)
-            self.middle_layout.addWidget(button)
-            self.series_buttons.append(button)
-
-            headers_layout = QVBoxLayout()
-
-            for header in ["LOCATION", "FABRICATION", "MATERIAL", "PACKAGE"]:
-                header_label = QLabel(header)
-                header_label.setVisible(True)
-                headers_layout.addWidget(header_label)
-                header_style = SeriesManager.header_styles(header)
-                header_label.setStyleSheet(header_style)
-
-                checkbox_layout = QVBoxLayout()
-                checkboxes = []
-                for item in sorted(self.series_data[series][header]):
-                    checkbox = QCheckBox(item)
-                    checkbox.setVisible(True)
-                    checkbox_layout.addWidget(checkbox)
-                    checkboxes.append(checkbox)
-                    # TODO ensure checkbox click logic emits correctly
-                    checkbox.clicked.connect(self.handle_checkbox_click)
-                
-                headers_layout.addLayout(checkbox_layout)
-                self.series_labels[header] = header_label
-                self.series_checkboxes[header] = checkboxes
-            
-            self.middle_layout.addLayout(headers_layout)
+        self.child_buttons = []
         
+        series_keys = list(self.series_data.keys())
+        print("Series Keys: ", series_keys)
+        for series, series_info in self.series_data.items():
+            print("\nStart parent button Loop for Series: ", series)
+            # TODO NEW CODE Create a layout for each series
+            series_layout = QVBoxLayout()
+
+            # TODO NEW CODE Create parent button for each series
+            self.create_series_button(series, series_info, series_layout)
+
+            # TODO NEW CODE Add the series layout to the middle layout
+            self.middle_layout.addLayout(series_layout)
+
         self.series_manager.series_buttons = self.series_buttons
-        self.series_manager.series_labels = self.series_labels
-        self.series_manager.series_checkboxes = self.series_checkboxes
+
+    # handles creation of buttons for unique series found in the Series_Config.csv file
+    def create_series_button(self, series, series_info, series_layout):
+        # for series, rows in self.series_data.items():
+        print("Current Series: ", series)
+        # Create parent button for each series
+        series_button = QPushButton(series)
+        series_button.setStyleSheet("background-color: #C63F3F; color: white;") #
+        # Initially hide buttons. Set visible when condition is met
+        series_button.setEnabled(False)
+        series_button.setVisible(False)
+        series_button.clicked.connect(self.handle_series_button_click)
+        series_layout.addWidget(series_button)
+        self.series_buttons.append(series_button)
+
+        #Create child buttons for each row of data in unique series
+        self.create_child_buttons(series, series_info, series_layout)
+
+    # Handles child series buttons. child series code from above function will be moved here 
+    def create_child_buttons(self, series, series_info, series_layout):
+        # Loop through extracted csv rows and set button layout and visuals
+        for row in self.get_combined_row_data(series, series_info): # Call function to pass row string to build button string info
+            child_button = QPushButton(row)
+            child_button.setStyleSheet("background-color: #9C9C9C; color: black;") # Inactive -- Grey
+            # Initially hide buttons. Set visible when condition is met
+            child_button.setEnabled(False)
+            child_button.setVisible(False)
+            child_button.clicked.connect(self.handle_child_button_click)
+            series_layout.addWidget(child_button)
+            self.series_buttons.append(child_button)
+   
+    # Handles string concat of extracted series config row data
+    def get_combined_row_data(self, series, series_info):
+        combined_rows = []
+        
+        # Check if series_info contains the necessary columns
+        print("Series: ", series)
+        print("Series Info: ", series_info)
+        # Loop through rows and extract data into child buttons
+        for row in series_info:
+            combined_row = "->".join(row)
+            print("Combined Row: ", combined_row)
+            combined_rows.append(combined_row)
+
+        return combined_rows
+
+    # Handles logic for Series Child button clicks
+    def handle_child_button_click(self):
+        # TODO finish function logic to handle series child button clicks. 
+        """
+        This function handles events for series button clicks
+        When no folders for the specified info exist if a series is active and the child button is clicked
+        Folders for that specific series will be created in sequence. The button is then active
+        Active buttons begin the processes of asset inputs into created folders on the right hand panel.
+        """
+        pass
 
     # Handle signal emit when series button is clicked
     def handle_series_button_click(self):
         clicked_button = self.sender()
         series = clicked_button.text()
         print(f"Series: {series}")
-        
+
         if self.active_series_button:
-            self.active_series_button.setStyleSheet("background-color: #0B8ED4; color: white;")
+            self.active_series_button.setStyleSheet("background-color: #0B8ED4; color: white;") # Color Blue
         self.active_series_button = clicked_button
-        clicked_button.setStyleSheet("background-color: #2E982B; color: white;")
+        print("Button Activated: ")
+        clicked_button.setStyleSheet("background-color: #2E982B; color: white;") # Color Green
 
         selected_item = self.tree_widget.currentItem() # Get selected item name from Tree
         parent_path = self.tree_widget.get_item_path(selected_item)
         print(f"Parent path: {parent_path}")
 
+        return
         # TODO new function implementation for Kit sku bundles
         self.series_manager.create_bundle(series)
         return # temp kill processes after new bundle code added.
@@ -337,24 +376,3 @@ class HomeScreen(QMainWindow):
                     QMessageBox.warning(self, "Error", f"Failed to create series folder '{series}'.")               
 
         self.update_header_visibility()
-
-    # Handles when label headers are visible in the window
-    def update_header_visibility(self):
-        for series in self.series_data.keys():
-            if series in self.series_labels:
-                headers = self.series_labels[series]
-                self.checkbox_visibility(headers, series)
-
-    # Handles when checkboxes are visible in middle layout window
-    def checkbox_visibility(self, headers, series):
-        for header, label in headers.items():
-            label.setVisible(True)
-            checkboxes = self.series_checkboxes[series][header]
-            for checkbox in checkboxes:
-                checkbox.setVisible(True)
-
-    def handle_checkbox_click(self):
-        clicked_box = self.sender()
-        active_checkbox = clicked_box.text()
-        print("Clicked Checkbox: ", active_checkbox)
-        checkbox_status = self.series_manager.handle_checkbox(active_checkbox)
