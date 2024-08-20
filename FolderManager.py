@@ -9,6 +9,7 @@ class FolderManager:
     # Handles folder creation helpers
     def create_folder(self, folder_name):
         new_folder_path = os.path.join(self.root_dir, folder_name)
+        print("Create Folder: ", new_folder_path)
         if not os.path.exists(new_folder_path):
             os.makedirs(new_folder_path)
             return True

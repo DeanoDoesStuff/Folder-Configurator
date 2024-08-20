@@ -1,22 +1,24 @@
 # SeriesManager.py
 from collections import defaultdict
 import os
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QMessageBox
+from PyQt5.QtWidgets import QMessageBox
 from FolderManager import FolderManager
 from Utility import load_series_data
 
-
+# Handles all logic for middle layout from series to sub series buttons,
+# creating folders, and highlighting folder to button relationship states.
 class SeriesManager:
-    def __init__(self, root_dir, series_buttons, child_buttons, series_data, series_labels,
-                  series_checkboxes, current_mmy_path, folder_manager):
+    def __init__(self, root_dir, series_buttons, child_buttons, series_data, kit_sku_dict,
+                   current_mmy_path, parent_path, folder_manager):
         self.root_dir = root_dir
         self.series_buttons = series_buttons
+        self.kit_sku_dict = kit_sku_dict
         self.child_buttons = child_buttons
         self.series_data = series_data
-        self.series_labels = series_labels
-        self.series_checkboxes = series_checkboxes
         self.current_mmy_path = current_mmy_path
+        self.parent_path = parent_path
         self.folder_manager = folder_manager
+
 
     # Handles logic for enabling series buttons when conditions are met
     def enable_series_buttons(self, enable, current_mmy_path=None):
@@ -34,23 +36,39 @@ class SeriesManager:
                 button.setEnabled(False)
             self.current_mmy_path = ""
      
+
     # Handles series button updates
     def update_series_button_states(self, item):
+        series_list = []
+        parent_state_list = []
         if item:
             for button in self.series_buttons:
-                series_path = os.path.join(self.current_mmy_path, button.text())
+                series = button.text()
+                print("Series: ", series)
+                series_path = os.path.join(self.current_mmy_path, series)
+                series_list.append(series)
                 if os.path.exists(series_path):
+                    print(f"Series: {series} Exists")
                     button.setStyleSheet("background-color: #0B8ED4; color: white") # Folder exists, button is blue
-                    parent_button = button
+                    # TODO These methods will change over to the tree selection in HomeScreen
+                    # self.enable_child_states()
+                    # self.update_child_button_states(series, "blue")
                     parent_state = "blue"
-                    self.update_child_button_states(parent_button, parent_state)
+                    parent_state_list.append(parent_state)
+                    
                 else:
                     button.setStyleSheet("background-color: #C63F3F; color: white") # Folder doesn't exist, button is red
-                    parent_button = button
+                    # TODO These methods will change over to the tree selection in HomeScreen
+                    # self.enable_child_states
+                    # self.update_child_button_states(series, "red")
                     parent_state = "red"
-                    self.update_child_button_states(parent_button, parent_state)
+                    parent_state_list.append(parent_state)
+            # Return list of tuples for series and parent states after looping through series buttons
+            series_data = list(zip(series_list, parent_state_list))
+            return series_data
         else:
             pass
+    
     
     # Handle enableing child buttons states when conditions are met
     def enable_child_states(self):
@@ -58,78 +76,70 @@ class SeriesManager:
             button.setVisible(True)
             button.setEnabled(True)
     
-    # Handles updates to the buttons states for Series Child buttons
-    def update_child_button_states(self, parent_button, parent_state):
-        print("Child Buttons: ", self.child_buttons)
-        for child_button in self.child_buttons:
-            if parent_state == "blue":
-                child_button.setStyleSheet("background-color: #C63F3F; color: white") # Set to Red
-            elif parent_state == "red":
-                child_button.setStyleSheet("background-color: #9C9C9C; color: white") # Set to Grey
-            else:
-                child_button.setStyleSheet("background-color: #9C9C9C; color: white") # Default Set to Grey
+
+    # Handles sub series button updates
+    def update_child_button_states(self, series_data):
+        # BUG BIG ISSUE first kit sku button at every parent series is grey when it should be red!!!
+        # Iterate through each sereis and its state in series_data
+        for series, parent_state in series_data:
+            if series in self.kit_sku_dict:
+                combined_rows = self.kit_sku_dict[series]
+                current_row_string_list = self.format_rows(combined_rows, series)
+                # print("\nCombined Row String: ", current_row_string_list)
+            
+                for child_button in self.child_buttons:
+                    #print("Current Child button: ", child_button.text())
+                    child_str = self.format_child_strings(child_button.text(), series)
+                    #print("Formatted Child String: ", child_str)
+                    if child_str in current_row_string_list:
+                        #print("Child String match! ")
+                        if parent_state == "blue":
+                            #print("Updating Button for Series: ", series, " : ", child_button.text())
+                            child_button.setStyleSheet("background-color: #C63F3F; color: white")
+                        elif parent_state == "red":
+                            child_button.setStyleSheet("background-color: #9C9C9C; color: white")
 
 
-    # TODO new function added to replace checkbox functions and create folders for Kit Skus in bundles
-    def create_bundle(self, series):
-        if not self.current_mmy_path:
-            print("No current MMY path selected.")
-            return
-        
-        # Get the data for the specific series
-        series_data = self.series_data.get(series, defaultdict)
-        print("Series Data: ", series_data)
+    def active_child_button(self, clicked_child, series):
+        print("Clicked Child: ", clicked_child)
+        clicked_child.setStyleSheet("background-color: #2E982B; color: white;")
+        # BUG after updating style when a new child is clicked the color of first,
+        #  needs to be set to blue
+    
 
-        # Create base folder path
-        base_folder_path = os.path.join(self.current_mmy_path, series)
-        self.create_folders(base_folder_path, series_data)
-        #create_folders = self.create_folders(base_folder_path, series_data)
+    # Breaks sub series button string into respective pieces for folder creation and comparison.
+    def handle_sub_series_pieces(self, kit_bundle):
+        print("Clicked Sub Series: ", kit_bundle)
+        sub_series_pieces = kit_bundle.split("->")
+        return sub_series_pieces
+    
 
-    # Handle extraction of Location data
-    def create_folders(self, base_folder_path, series_data):
-        print("\n Location Folders--")
-        for location in series_data['LOCATION']:
-            location_path = os.path.join(base_folder_path, location)
-            print("Location Path: ", location_path)
-            self.fabrication_folder(base_folder_path, location, series_data)
+    # Handles creation of sub series folder when a button is clicked and no folders exist
+    def create_sub_series_folders(self, sub_series_pieces):
+        location, fabrication, material, package = sub_series_pieces
+        return location, fabrication, material, package
 
-    def fabrication_folder(self, base_folder_path, location, series_data):
-        print("\n Fabrication Folders--")
-        for fabrication in series_data['FABRICATION']:
-            fabrication_path = os.path.join(base_folder_path, location, fabrication)
-            print("Fabrication Path: ", fabrication_path)
-            self.material_folder(base_folder_path, location, fabrication, series_data)
 
-    def material_folder(self, base_folder_path, location, fabrication, series_data):
-        print("\n Material Folders--")
-        for material in series_data['MATERIAL']:
-            material_path = os.path.join(base_folder_path, location, fabrication, material)
-            print("Material Path: ", material_path)
-            self.package_folder(base_folder_path, location, fabrication, material, series_data)
+    # Handles formatting of each row to add the current series to the front of the row string
+    # all unique series row string get added to a list
+    def format_rows(self, combined_rows, series):
+        current_row_string_list = []
+        for entry in combined_rows:
+            current_row_string = ''.join(series + "->" + entry)
+            current_row_string_list.append(current_row_string)
+        return current_row_string_list # Returns full row string including the current series at the beginning of every row
 
-    def package_folder(self, base_folder_path, location, fabrication, material, series_data):
-        print("\n Package Folders--")
-        for package in series_data['PACKAGE']:
-            package_path = os.path.join(base_folder_path, location, fabrication, material, package)
-            print("Package Path: ", package_path)
-            self.create_package_folder(package_path, base_folder_path, location, fabrication, material, package, series_data)
-        
-        """Construct the folder path based on the provided parameters."""
-        print("Base Folder Path: ", base_folder_path)
 
-        # Build folder paths for each KIT SKU part
-    def build_package_folder_path(self, base_folder_path, location, fabrication, material, package, series_data):
-        print("\n Package Folders--")
-        for package in series_data['PACKAGE']:
-            package_path = os.path.join(base_folder_path, location, fabrication, material, package)
-            print("Package Path: ", package_path)
-            self.create_package_folder(package_path, base_folder_path, location, fabrication, material, package)
+    # Handles formatting of each child button string by adding the current series to the front of every button string
+    def format_child_strings(self, child_text, series):
+        return f"{series}->{child_text}"
 
-        # gets called after full Kit sku package has been built and creates folders
-    def create_package_folder(self, package_path, base_folder_path, location, fabrication, material, package, series_data):
-        print("Creating folder: ", package_path)
-        """Iterate through the package data and build the final folder path."""
-        for package in series_data['PACKAGE']:
-            # folder_path = self.build_package_folder_path(base_folder_path, location, fabrication, material, package)
-            os.makedirs(package_path, exist_ok=True)
-            print(f"Created folder: {package_path}")
+
+    # Handles creation of subfolders for sub series if current path doesn't exist.
+    def create_sub_series(self, sub_series_path):
+        print("Sub Series Path: ", sub_series_path)
+        if not os.path.exists(sub_series_path):
+            os.makedirs(sub_series_path)
+            return True
+        else:
+            return False

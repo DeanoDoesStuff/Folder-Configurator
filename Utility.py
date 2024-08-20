@@ -14,7 +14,6 @@ def load_series_data(csv_path):
             cleaned_headers = [header.strip() for header in headers]
 
             for row in reader:
-                print("Row In CSV:", row)
                 # Access row data using cleaned headers
                 series = row.get(cleaned_headers[0], "").strip()  # 'SERIES'
                 location = row.get(cleaned_headers[1], "").strip()  # 'LOCATION'

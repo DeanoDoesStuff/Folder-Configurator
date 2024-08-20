@@ -39,7 +39,6 @@ class HomeScreen(QMainWindow):
         # Splitter to divide the main window
         self.splitter = QSplitter(Qt.Horizontal)
         self.main_layout.addWidget(self.splitter)
-
         # Left Widget (Folder Tree)
         self.left_widget = QWidget()
         self.left_layout = QVBoxLayout()
@@ -61,30 +60,32 @@ class HomeScreen(QMainWindow):
         self.middle_scroll_area.setWidget(self.middle_widget)
         self.splitter.addWidget(self.middle_scroll_area)
 
+        # Initialize mmy path
+        self.current_mmy_path = ""
+        self.parent_path = ""
         # Load series data from CSV file
         self.series_data = load_series_data('Configs/SERIES_CONFIG.csv')
 
-
+        # Initialize kit sku dictionary
+        self.kit_sku_dict = {}
         
         # Initialize SeriesManager
         self.series_buttons = []
         self.child_buttons = []
-        self.series_labels = {}
-        self.series_checkboxes = {}
+        self.combined_rows = []
         self.series_manager = SeriesManager(
             root_dir = self.root_dir, 
             series_buttons = self.series_buttons,
             child_buttons = self.child_buttons,
+            kit_sku_dict = self.kit_sku_dict,
             series_data = self.series_data,
-            series_labels = self.series_labels, 
-            series_checkboxes = self.series_checkboxes,
-            # Add Folder Manager
             folder_manager = self.folder_manager,
-            current_mmy_path=""
+            current_mmy_path = self.current_mmy_path,
+            parent_path = self.parent_path
         )
 
-                # Load and display series buttons
-        self.load_series_buttons()  # Load series buttons
+        # Load and display series buttons
+        self.load_series_buttons()
 
         # Tree Widget
         self.tree_widget = FolderTree(self.root_dir, self.folder_manager, self.series_manager, self)
@@ -146,9 +147,14 @@ class HomeScreen(QMainWindow):
             current_mmy_path = self.tree_widget.get_item_path(item)
             print("Current Path: ", current_mmy_path)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
-            self.series_manager.update_series_button_states(item)
+            series_data = self.series_manager.update_series_button_states(item)
+            print("Series List: ", series_data)
+            # TODO update SeriesManager methods to update sub series states when at Year depth
+            self.series_manager.enable_child_states()
+            self.series_manager.update_child_button_states(series_data)
 
         elif depth > 3:
+            # TODO disable tree at depth greater than 3
             current_mmy_path = self.tree_widget.get_item_path(item)
             print("Current Tree Item Path: ", current_mmy_path)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
@@ -201,6 +207,7 @@ class HomeScreen(QMainWindow):
             self.create_folder_button.setEnabled(self.folder_type != " None")
             self.create_folder_button.setEnabled(self.folder_type != " SERIES")
             self.update_sku_label(current_sku)
+            return current_sku
     
     # Handles the creation of new folders
     def create_new_folder(self):
@@ -258,27 +265,24 @@ class HomeScreen(QMainWindow):
     # Handles the loading of series and children objects for KIT skus
     def load_series_buttons(self):
         self.series_buttons = []
-        self.child_buttons = []
         
         series_keys = list(self.series_data.keys())
         print("Series Keys: ", series_keys)
         for series, series_info in self.series_data.items():
             print("\nStart parent button Loop for Series: ", series)
-            # TODO NEW CODE Create a layout for each series
+            # Create a layout for each series
             series_layout = QVBoxLayout()
 
-            # TODO NEW CODE Create parent button for each series
+            # Create parent button for each series
             self.create_series_button(series, series_info, series_layout)
 
-            # TODO NEW CODE Add the series layout to the middle layout
+            # Add the series layout to the middle layout
             self.middle_layout.addLayout(series_layout)
 
         self.series_manager.series_buttons = self.series_buttons
 
     # handles creation of buttons for unique series found in the Series_Config.csv file
     def create_series_button(self, series, series_info, series_layout):
-        # for series, rows in self.series_data.items():
-        print("Current Series: ", series)
         # Create parent button for each series
         series_button = QPushButton(series)
         series_button.setStyleSheet("background-color: #C63F3F; color: white;") #
@@ -287,10 +291,16 @@ class HomeScreen(QMainWindow):
         series_button.setVisible(False)
         series_button.clicked.connect(self.handle_series_button_click)
         series_layout.addWidget(series_button)
+        
+        # BUG for some reason the child series buttons are being added to the list of parent series buttons. 
+        # They should be going into their own list instead
         self.series_buttons.append(series_button)
 
         #Create child buttons for each row of data in unique series
         self.create_child_buttons(series, series_info, series_layout)
+        # Call Kit SKU dictionary to store series as key and combined rows as values
+        self.kit_sku_dictionary(series, self.combined_rows)
+        
 
     # Handles child series buttons. child series code from above function will be moved here 
     def create_child_buttons(self, series, series_info, series_layout):
@@ -303,11 +313,12 @@ class HomeScreen(QMainWindow):
             child_button.setVisible(False)
             child_button.clicked.connect(self.handle_child_button_click)
             series_layout.addWidget(child_button)
-            self.series_buttons.append(child_button)
+            # BUG fix the parent and child buttons appending issue. 
+            self.child_buttons.append(child_button)
    
     # Handles string concat of extracted series config row data
     def get_combined_row_data(self, series, series_info):
-        combined_rows = []
+        self.combined_rows = []
         
         # Check if series_info contains the necessary columns
         print("Series: ", series)
@@ -315,21 +326,17 @@ class HomeScreen(QMainWindow):
         # Loop through rows and extract data into child buttons
         for row in series_info:
             combined_row = "->".join(row)
-            print("Combined Row: ", combined_row)
-            combined_rows.append(combined_row)
+            # print("Combined Row: ", combined_row)
+            self.combined_rows.append(combined_row)
 
-        return combined_rows
+        return self.combined_rows
 
-    # Handles logic for Series Child button clicks
-    def handle_child_button_click(self):
-        # TODO finish function logic to handle series child button clicks. 
-        """
-        This function handles events for series button clicks
-        When no folders for the specified info exist if a series is active and the child button is clicked
-        Folders for that specific series will be created in sequence. The button is then active
-        Active buttons begin the processes of asset inputs into created folders on the right hand panel.
-        """
-        pass
+    # Handle dictionary to hold Series as keys and child buttons as values
+    def kit_sku_dictionary(self, series, combined_rows):
+        # Update dictionary to hold kit skus where series are keys and combined rows are values
+        self.kit_sku_dict[series] = combined_rows
+        self.series_manager.kit_sku_dict = self.kit_sku_dict
+        return self.kit_sku_dict
 
     # Handle signal emit when series button is clicked
     def handle_series_button_click(self):
@@ -340,39 +347,102 @@ class HomeScreen(QMainWindow):
         if self.active_series_button:
             self.active_series_button.setStyleSheet("background-color: #0B8ED4; color: white;") # Color Blue
         self.active_series_button = clicked_button
-        print("Button Activated: ")
+        
         clicked_button.setStyleSheet("background-color: #2E982B; color: white;") # Color Green
 
         selected_item = self.tree_widget.currentItem() # Get selected item name from Tree
-        parent_path = self.tree_widget.get_item_path(selected_item)
-        print(f"Parent path: {parent_path}")
-
-        return
-        # TODO new function implementation for Kit sku bundles
-        self.series_manager.create_bundle(series)
-        return # temp kill processes after new bundle code added.
-        item_depth = self.tree_widget.get_item_depth(selected_item) # Get selected item depth from Tree
-        print("Selected Item Depth: ", item_depth)
+        self.parent_path = self.tree_widget.get_item_path(selected_item)
+        print(f"Parent path: {self.parent_path}")
         
-        new_folder_path = os.path.join(parent_path, series)
-        print("New Folder Path: ", new_folder_path)
+        # Calls Helper function to handle sku updates,
+        self.series_sku( clicked_button)
 
-        # TODO check depth when entering function, if beyond year, alter behavior
-        if item_depth >= 4:
-            if os.path.exists(parent_path):
-                print(f"Folder Exists for Series: {series}")
-                print(f"Folder Path: ", parent_path)
+        new_folder_path = os.path.join(self.parent_path, series)
+        # Check if newly created path already exists in the directory
+        if not os.path.exists(new_folder_path):
+            print("No folder exists yet for this series")
+            if self.folder_manager.create_folder(new_folder_path):
+                print("New Folder Path: ", new_folder_path)
+                QMessageBox.information(self, "Success", f"Series folder '{series}' created successfully.")
+                self.tree_widget.expandItem(selected_item) # Ensure the newly created folder is visible
+                clicked_button.setStyleSheet("background-color: #2E982B; color: white;")  # Change to light green
+            else:
+                QMessageBox.warning(self, "Error", f"Failed to create series folder '{series}'.") 
+        return
 
+    # Helper function to build out series sku data
+    def series_sku(self, clicked_button):
+        mmy_sku_num = self.sku_label.text().split(': ')[1]
+        while len(mmy_sku_num) > 8:
+            mmy_sku_num = mmy_sku_num[:-1]
+            print("MMY SKU: ", mmy_sku_num)
+        self.update_kit_sku(clicked_button, mmy_sku_num)
+
+    # Helper function to build out sub series sku data
+    def sub_series_sku(self, clicked_button):
+        mmy_sku_num = self.sku_label.text().split(': ')[1]
+        print("Sub Series Sku Number: ", mmy_sku_num)
+        while len(mmy_sku_num) > 10:
+            mmy_sku_num = mmy_sku_num[:-1]
+            print("MMY SKU: ", mmy_sku_num)
+        self.update_kit_sku(clicked_button, mmy_sku_num)
+
+
+    # Handles logic for updating kit sku variable displayed in the right pane
+    def update_kit_sku(self, clicked_button, mmy_sku_num):
+        # Checks the length of parent SKU 
+        if len(mmy_sku_num) == 8:
+            # Process the sku as only the MMY and Series
+            series_sku = SkuBuilder.process_kit_sku(clicked_button) # Calls function to process kit sku
         else:
-            # Check if newly created path already exists in the directory
-            if not os.path.exists(new_folder_path):
-                print("No folder exists yet for this series")
-                if self.folder_manager.create_folder(new_folder_path):
-                    print("New Folder Path: ", new_folder_path)
-                    QMessageBox.information(self, "Success", f"Series folder '{series}' created successfully.")
-                    self.tree_widget.expandItem(selected_item) # Ensure the newly created folder is visible
-                    clicked_button.setStyleSheet("background-color: lightgreen; color: black;")  # Change to light green
-                else:
-                    QMessageBox.warning(self, "Error", f"Failed to create series folder '{series}'.")               
+            # Process the sku as the MMY and the full Kit SKU, building the full Product SKU as a result
+            series_sku = SkuBuilder.process_product_sku(clicked_button) # Calls function to process product sku
+            product_sku = mmy_sku_num + series_sku
+            self.update_sku_label(product_sku) # Update display widget with newly build product SKU
+            return # Kills the process before moving into kit sku functionality
 
-        self.update_header_visibility()
+        current_sku_num = mmy_sku_num # Assign mutable variable to current baseline MMY SKU
+        
+        current_sku = "".join(current_sku_num + series_sku[0]) # Joins base SKU with extracted data
+        self.update_sku_label(current_sku) # Updates the display widget with newly build SKU
+
+
+    # Handles logic for Series Child button clicks
+    def handle_child_button_click(self):
+        # TODO finish function logic to handle series child button clicks. 
+        """
+        This function handles events for series button clicks
+        When no folders for the specified info exist if a series is active and the child button is clicked
+        Folders for that specific series will be created in sequence. The button is then active
+        Active buttons begin the processes of asset inputs into created folders on the right hand panel.
+        """
+        # BUG this logic should only fire if a parent series has been selected and activated
+        
+        if self.active_series_button:
+            print("Parent Button: ", self.active_series_button.text())
+            series = self.active_series_button.text()
+            clicked_child = self.sender()
+            kit_bundle = clicked_child.text()
+            folders_created = False
+           
+            SeriesManager.active_child_button(self, clicked_child, series)
+            sub_series_pieces = SeriesManager.handle_sub_series_pieces(self, kit_bundle)
+            # TODO create folders if none exist
+            series_path = os.path.join(self.parent_path, series)
+            print("Series Path: ", series_path)
+            (location, fabrication,
+              material, package) = SeriesManager.create_sub_series_folders(self, sub_series_pieces)
+            sub_series_path = series_path
+            for folder in sub_series_pieces:
+                sub_series_path = os.path.join(sub_series_path, folder)
+            
+                # TODO create logic to extract sku data and update the current sku
+                 # Calls Helper function to handle sku updates,
+                self.sub_series_sku(clicked_child)
+
+                # Call create sub series function while still in sub series list loop
+                folders_created = SeriesManager.create_sub_series(self, sub_series_path)
+            if folders_created == True:
+                QMessageBox.information(self, "Success",
+                                        f"Folders '{location}'; '{fabrication}'; '{material}'; '{package}'; Succesfully Created!")
+            
