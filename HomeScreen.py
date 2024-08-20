@@ -7,9 +7,9 @@ from PyQt5.QtGui import QIcon
 from FolderManager import FolderManager
 from FolderTree import FolderTree
 from SkuBuilder import SkuBuilder
-
+from CompanionManager import CompanionManager
 from SeriesManager import SeriesManager
-from Utility import load_series_data
+from Utility import load_series_data, create_kit_sku_config, load_kit_sku_data
 
 class HomeScreen(QMainWindow):
     def __init__(self, root_dir, folder_type, parent=None):
@@ -137,7 +137,11 @@ class HomeScreen(QMainWindow):
 
         # Track the active series button
         self.active_series_button = None
-        
+
+        # Instantiate CompanionManager
+        self.companion_manager = CompanionManager()
+        self.right_layout.addWidget(self.companion_manager)
+    
 
     # Handles signals from items clicked in Folder Tree
     def handle_tree_item_click(self, item):
@@ -424,19 +428,30 @@ class HomeScreen(QMainWindow):
             clicked_child = self.sender()
             kit_bundle = clicked_child.text()
             folders_created = False
-           
+            # Function calls for building, creating, and reading kit sku config files
+            kit_sku_config = SeriesManager.handle_kit_config(self, series, kit_bundle)
+            csv_path = create_kit_sku_config(kit_sku_config)
+
+            # Load companion data from the current CSV
+            companion_data = load_kit_sku_data(csv_path)
+            print("Extracted Companion Data: ", companion_data)
+
+            # Update active child state
             SeriesManager.active_child_button(self, clicked_child, series)
+
             sub_series_pieces = SeriesManager.handle_sub_series_pieces(self, kit_bundle)
-            # TODO create folders if none exist
+
+            # Create folders if none exist
             series_path = os.path.join(self.parent_path, series)
             print("Series Path: ", series_path)
             (location, fabrication,
               material, package) = SeriesManager.create_sub_series_folders(self, sub_series_pieces)
+            
             sub_series_path = series_path
             for folder in sub_series_pieces:
                 sub_series_path = os.path.join(sub_series_path, folder)
             
-                # TODO create logic to extract sku data and update the current sku
+                # Extracts sku data and update the current sku
                  # Calls Helper function to handle sku updates,
                 self.sub_series_sku(clicked_child)
 
@@ -446,3 +461,5 @@ class HomeScreen(QMainWindow):
                 QMessageBox.information(self, "Success",
                                         f"Folders '{location}'; '{fabrication}'; '{material}'; '{package}'; Succesfully Created!")
             
+            # Display file input widgets based on companion data
+            self.companion_manager.create_file_input_widgets(companion_data)

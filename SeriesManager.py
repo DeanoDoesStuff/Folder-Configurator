@@ -143,3 +143,17 @@ class SeriesManager:
             return True
         else:
             return False
+
+    # Handles processing of Kit SKU config files 
+    def handle_kit_config(self, series, kit_bundle):
+        # Find special character in kit_bundle string to remove special characters
+        if "->" in kit_bundle:
+            # Add entry to list by splitting at special character
+            format_kit_bundle_list = kit_bundle.split("->") 
+            format_kit_bundle = "_".join(format_kit_bundle_list) # Joins the list into a string
+            print("Format Kit Bundle: ", format_kit_bundle)
+            kit_sku_config = series + "_" + format_kit_bundle # Builds the final config file name
+            print("Kit SKU Config: ", kit_sku_config)
+        return kit_sku_config
+
+
