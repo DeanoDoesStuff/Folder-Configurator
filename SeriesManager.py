@@ -1,9 +1,6 @@
 # SeriesManager.py
-from collections import defaultdict
+
 import os
-from PyQt5.QtWidgets import QMessageBox
-from FolderManager import FolderManager
-from Utility import load_series_data
 
 # Handles all logic for middle layout from series to sub series buttons,
 # creating folders, and highlighting folder to button relationship states.
@@ -22,15 +19,12 @@ class SeriesManager:
 
     # Handles logic for enabling series buttons when conditions are met
     def enable_series_buttons(self, enable, current_mmy_path=None):
-        print("Enable Series buttons: ")
         if enable and current_mmy_path:
             self.current_mmy_path = current_mmy_path
-            print("Current MMY Path: ", current_mmy_path)
             for button in self.series_buttons:
                 button.setVisible(True)
                 button.setEnabled(True)
         else:
-            print("No button available to enable")
             for button in self.series_buttons:
                 button.setVisible(False)
                 button.setEnabled(False)
@@ -44,11 +38,9 @@ class SeriesManager:
         if item:
             for button in self.series_buttons:
                 series = button.text()
-                print("Series: ", series)
                 series_path = os.path.join(self.current_mmy_path, series)
                 series_list.append(series)
                 if os.path.exists(series_path):
-                    print(f"Series: {series} Exists")
                     button.setStyleSheet("background-color: #0B8ED4; color: white") # Folder exists, button is blue
                     # TODO These methods will change over to the tree selection in HomeScreen
                     # self.enable_child_states()
@@ -85,8 +77,7 @@ class SeriesManager:
             if series in self.kit_sku_dict:
                 combined_rows = self.kit_sku_dict[series]
                 current_row_string_list = self.format_rows(combined_rows, series)
-                # print("\nCombined Row String: ", current_row_string_list)
-            
+                # TODO refactor this nested for loop into its own function.
                 for child_button in self.child_buttons:
                     #print("Current Child button: ", child_button.text())
                     child_str = self.format_child_strings(child_button.text(), series)
@@ -101,7 +92,6 @@ class SeriesManager:
 
 
     def active_child_button(self, clicked_child, series):
-        print("Clicked Child: ", clicked_child)
         clicked_child.setStyleSheet("background-color: #2E982B; color: white;")
         # BUG after updating style when a new child is clicked the color of first,
         #  needs to be set to blue
@@ -109,7 +99,6 @@ class SeriesManager:
 
     # Breaks sub series button string into respective pieces for folder creation and comparison.
     def handle_sub_series_pieces(self, kit_bundle):
-        print("Clicked Sub Series: ", kit_bundle)
         sub_series_pieces = kit_bundle.split("->")
         return sub_series_pieces
     
@@ -137,7 +126,6 @@ class SeriesManager:
 
     # Handles creation of subfolders for sub series if current path doesn't exist.
     def create_sub_series(self, sub_series_path):
-        print("Sub Series Path: ", sub_series_path)
         if not os.path.exists(sub_series_path):
             os.makedirs(sub_series_path)
             return True
@@ -151,9 +139,5 @@ class SeriesManager:
             # Add entry to list by splitting at special character
             format_kit_bundle_list = kit_bundle.split("->") 
             format_kit_bundle = "_".join(format_kit_bundle_list) # Joins the list into a string
-            print("Format Kit Bundle: ", format_kit_bundle)
             kit_sku_config = series + "_" + format_kit_bundle # Builds the final config file name
-            print("Kit SKU Config: ", kit_sku_config)
         return kit_sku_config
-
-

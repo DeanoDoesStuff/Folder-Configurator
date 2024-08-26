@@ -1,6 +1,6 @@
 #HomeScreen.py
 import os
-from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton,
+from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QTreeWidgetItem,
                              QMessageBox, QSplitter, QHBoxLayout, QLabel, QScrollArea)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -9,7 +9,8 @@ from FolderTree import FolderTree
 from SkuBuilder import SkuBuilder
 from CompanionManager import CompanionManager
 from SeriesManager import SeriesManager
-from Utility import load_series_data, create_kit_sku_config, load_kit_sku_data
+from Utility import Utility
+from Companions import companion_dict_data
 
 class HomeScreen(QMainWindow):
     def __init__(self, root_dir, folder_type, parent=None):
@@ -64,7 +65,7 @@ class HomeScreen(QMainWindow):
         self.current_mmy_path = ""
         self.parent_path = ""
         # Load series data from CSV file
-        self.series_data = load_series_data('Configs/SERIES_CONFIG.csv')
+        self.series_data = Utility.load_series_data('Configs/SERIES_CONFIG.csv')
 
         # Initialize kit sku dictionary
         self.kit_sku_dict = {}
@@ -89,7 +90,7 @@ class HomeScreen(QMainWindow):
 
         # Tree Widget
         self.tree_widget = FolderTree(self.root_dir, self.folder_manager, self.series_manager, self)
-        self.tree_widget.itemClicked.connect(self.handle_tree_item_click)
+        self.tree_widget.itemClicked.connect(self.handle_tree_item_click) # type: ignore
         self.tree_widget.empty_space_clicked.connect(self.reset_folder_type)  # Connect to empty space signal 
         self.left_layout.addWidget(self.tree_widget)
         
@@ -124,13 +125,21 @@ class HomeScreen(QMainWindow):
         self.right_layout = QVBoxLayout()
         self.right_widget.setLayout(self.right_layout)
 
-        self.sku_label = QLabel("Current SKU: ")
-        self.right_layout.addWidget(self.sku_label)
+        #self.sku_label = QLabel("Current SKU: ")
+        #self.right_layout.addWidget(self.sku_label)
 
         self.splitter.addWidget(self.right_widget)
 
         # Set initial sizes for the splitter (optional)
         self.splitter.setSizes([200, 400, 600])
+
+        # Set Tulip integration window Layout
+        self.submit_widget = QWidget()
+        self.submit_layout = QVBoxLayout()
+        self.submit_widget.setLayout(self.submit_layout)
+
+        self.sku_label = QLabel("Current SKU: ")
+        self.submit_layout.addWidget(self.sku_label)
 
         # Initialize folder type and button state
         self.update_folder_type(self.tree_widget.currentItem())
@@ -145,26 +154,53 @@ class HomeScreen(QMainWindow):
 
     # Handles signals from items clicked in Folder Tree
     def handle_tree_item_click(self, item):
-        self.update_folder_type(item)
+        # Process current tree item depth
         depth = self.tree_widget.get_item_depth(item)
+
+        if depth < 3:
+            self.update_folder_type(item)
+            self.tree_widget.setDisabled(False)
+
         if depth == 3:
+            self.update_folder_type(item)
             current_mmy_path = self.tree_widget.get_item_path(item)
-            print("Current Path: ", current_mmy_path)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
             series_data = self.series_manager.update_series_button_states(item)
-            print("Series List: ", series_data)
-            # TODO update SeriesManager methods to update sub series states when at Year depth
+
             self.series_manager.enable_child_states()
             self.series_manager.update_child_button_states(series_data)
+            # Re-enable tree widget if at depth less than 3
+            self.tree_widget.setDisabled(False)
+            self.lock_tree_beyond_mmy(item, depth)
 
         elif depth > 3:
-            # TODO disable tree at depth greater than 3
-            current_mmy_path = self.tree_widget.get_item_path(item)
-            print("Current Tree Item Path: ", current_mmy_path)
-            self.series_manager.enable_series_buttons(True, current_mmy_path)
-            self.series_manager.update_series_button_states(item)
-            #self.series_manager.update_active_series(item, current_mmy_path)
+            self.lock_tree_beyond_mmy(item, depth)
+
         return depth
+
+    def lock_tree_beyond_mmy(self, item, depth):
+        if depth <= 2:
+            return # Params met, tree is live for these depths
+        
+        # Recursively traverse tree items starting from the provided item
+        for i in range(item.childCount()):
+            child = item.child(i)
+            child_depth = self.tree_widget.get_item_depth(child)  # You need to define this method
+            if child_depth > 2:
+                # Disable interaction for this child item
+                self.set_item_interactive(child, False)
+            else:
+                # Continue traversing
+                self.lock_tree_beyond_mmy(child, child_depth)
+
+    def set_item_interactive(self, item, interactive):
+        flags = item.flags()
+        if interactive:
+            # Add flags to make item selectable and enabled
+            item.setFlags(flags | Qt.ItemIsSelectable | Qt.ItemIsEnabled) # type: ignore
+        else:
+            # Remove flags to make item non-selectable and disabled
+            item.setFlags(flags & ~(Qt.ItemIsSelectable | Qt.ItemIsEnabled)) # type: ignore
 
     # Handles tracking of selected folder type by calculating depth
     def update_folder_type(self, item):
@@ -185,25 +221,9 @@ class HomeScreen(QMainWindow):
             elif depth == 3:
                 self.folder_type = " SERIES"
                 current_sku = make_id + model_id + year_id
-            elif depth == 4:
-                self.folder_type = " LOCATION"
-                current_sku = make_id + model_id + year_id + series_id
-            elif depth ==5:
-                self.folder_type = " FABRICATION"
-                current_sku = make_id + model_id + year_id + series_id + location_id
-            elif depth ==6:
-                self.folder_type = " MATERIAL"
-                current_sku = make_id + model_id + year_id + series_id + location_id + fab_id
-            elif depth == 7:
-                self.folder_type = " PACKAGE"
-                current_sku = make_id + model_id + year_id + series_id + location_id + fab_id + mat_id
-            elif depth == 8:
-                self.folder_type = " Full SKU"
-                current_sku = make_id + model_id + year_id + series_id + location_id + fab_id + mat_id + package_id
             else:
                 self.folder_type = " None"
                 current_sku = self.make_id
-            
             if depth < 3:
                 self.new_folder_input.setPlaceholderText(f"Enter new{self.folder_type}")
             else:
@@ -273,7 +293,6 @@ class HomeScreen(QMainWindow):
         series_keys = list(self.series_data.keys())
         print("Series Keys: ", series_keys)
         for series, series_info in self.series_data.items():
-            print("\nStart parent button Loop for Series: ", series)
             # Create a layout for each series
             series_layout = QVBoxLayout()
 
@@ -324,9 +343,6 @@ class HomeScreen(QMainWindow):
     def get_combined_row_data(self, series, series_info):
         self.combined_rows = []
         
-        # Check if series_info contains the necessary columns
-        print("Series: ", series)
-        print("Series Info: ", series_info)
         # Loop through rows and extract data into child buttons
         for row in series_info:
             combined_row = "->".join(row)
@@ -346,7 +362,6 @@ class HomeScreen(QMainWindow):
     def handle_series_button_click(self):
         clicked_button = self.sender()
         series = clicked_button.text()
-        print(f"Series: {series}")
 
         if self.active_series_button:
             self.active_series_button.setStyleSheet("background-color: #0B8ED4; color: white;") # Color Blue
@@ -356,7 +371,7 @@ class HomeScreen(QMainWindow):
 
         selected_item = self.tree_widget.currentItem() # Get selected item name from Tree
         self.parent_path = self.tree_widget.get_item_path(selected_item)
-        print(f"Parent path: {self.parent_path}")
+        
         
         # Calls Helper function to handle sku updates,
         self.series_sku( clicked_button)
@@ -366,7 +381,6 @@ class HomeScreen(QMainWindow):
         if not os.path.exists(new_folder_path):
             print("No folder exists yet for this series")
             if self.folder_manager.create_folder(new_folder_path):
-                print("New Folder Path: ", new_folder_path)
                 QMessageBox.information(self, "Success", f"Series folder '{series}' created successfully.")
                 self.tree_widget.expandItem(selected_item) # Ensure the newly created folder is visible
                 clicked_button.setStyleSheet("background-color: #2E982B; color: white;")  # Change to light green
@@ -379,16 +393,13 @@ class HomeScreen(QMainWindow):
         mmy_sku_num = self.sku_label.text().split(': ')[1]
         while len(mmy_sku_num) > 8:
             mmy_sku_num = mmy_sku_num[:-1]
-            print("MMY SKU: ", mmy_sku_num)
         self.update_kit_sku(clicked_button, mmy_sku_num)
 
     # Helper function to build out sub series sku data
     def sub_series_sku(self, clicked_button):
         mmy_sku_num = self.sku_label.text().split(': ')[1]
-        print("Sub Series Sku Number: ", mmy_sku_num)
         while len(mmy_sku_num) > 10:
             mmy_sku_num = mmy_sku_num[:-1]
-            print("MMY SKU: ", mmy_sku_num)
         self.update_kit_sku(clicked_button, mmy_sku_num)
 
 
@@ -413,37 +424,43 @@ class HomeScreen(QMainWindow):
 
     # Handles logic for Series Child button clicks
     def handle_child_button_click(self):
-        # TODO finish function logic to handle series child button clicks. 
         """
         This function handles events for series button clicks
         When no folders for the specified info exist if a series is active and the child button is clicked
         Folders for that specific series will be created in sequence. The button is then active
         Active buttons begin the processes of asset inputs into created folders on the right hand panel.
         """
-        # BUG this logic should only fire if a parent series has been selected and activated
-        
+        # TODO create logic to handle creation of uni part groups
+        # TODO create logic to handle storing of misc assets -- instructions, bend sheets, 
+        # TODO create button logic to allow quick edits of config files when right clicking sub series button
         if self.active_series_button:
-            print("Parent Button: ", self.active_series_button.text())
             series = self.active_series_button.text()
             clicked_child = self.sender()
             kit_bundle = clicked_child.text()
             folders_created = False
+
             # Function calls for building, creating, and reading kit sku config files
             kit_sku_config = SeriesManager.handle_kit_config(self, series, kit_bundle)
-            csv_path = create_kit_sku_config(kit_sku_config)
-
-            # Load companion data from the current CSV
-            companion_data = load_kit_sku_data(csv_path)
-            print("Extracted Companion Data: ", companion_data)
 
             # Update active child state
             SeriesManager.active_child_button(self, clicked_child, series)
-
+            # Calls function to format sub series, returns formatted pieces in a list
             sub_series_pieces = SeriesManager.handle_sub_series_pieces(self, kit_bundle)
 
+            sub_series_combo = tuple(sub_series_pieces) # Convert the list to a tuple before accessing the dictionary
+            series_data = companion_dict_data.get(series, {}) # Check if series exists
+            companions = series_data.get(sub_series_combo, {}) # Access companions
+            print("Dict Extracted Companions: ", companions)
+            # Calls function to create companion button widgets
+            companion_buttons = CompanionManager.create_companion_buttons(self, companions)
+
+            # Calls function to create companion based radio buttons
+            CompanionManager.add_radio_buttons(self, companion_buttons)
+
+            # TODO create logic to detect if a custom or uni type has been selected
+            
             # Create folders if none exist
             series_path = os.path.join(self.parent_path, series)
-            print("Series Path: ", series_path)
             (location, fabrication,
               material, package) = SeriesManager.create_sub_series_folders(self, sub_series_pieces)
             
@@ -457,9 +474,24 @@ class HomeScreen(QMainWindow):
 
                 # Call create sub series function while still in sub series list loop
                 folders_created = SeriesManager.create_sub_series(self, sub_series_path)
+                # TODO create logic to store misc assets as well as specific custom image assets
+
+
             if folders_created == True:
                 QMessageBox.information(self, "Success",
                                         f"Folders '{location}'; '{fabrication}'; '{material}'; '{package}'; Succesfully Created!")
-            
-            # Display file input widgets based on companion data
-            self.companion_manager.create_file_input_widgets(companion_data)
+
+
+    # Handles companion button click logic.
+    def companion_button_click(self):
+        # TODO activates a companion button when clicked. 
+
+        # TODO Begin building companion sku to add to product sku for Tulip Integration
+        pass
+
+    # Handles type-variable radio button click logic.
+    def type_button_click(self):
+        # TODO when custom selected generate image input widgets.
+
+        # TODO else, generate uni buttons.
+        pass
