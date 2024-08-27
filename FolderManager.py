@@ -32,3 +32,4 @@ class FolderManager:
             return False
         except OSError:
             return False
+        

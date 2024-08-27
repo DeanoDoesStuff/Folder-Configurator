@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QFileDialog, QHBoxLay
                               QRadioButton, QButtonGroup, QPushButton)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
+import os
 
 class CompanionManager(QWidget):
     # TODO find a way to build out rows with the same companion to be placed in a row together. 
@@ -28,6 +29,8 @@ class CompanionManager(QWidget):
                 widget.setParent(None)  # Remove widget from the layout
                 widget.deleteLater()    # Schedule it for deletion
         companion_buttons = {}
+        companion_buttons_list = []
+        companions_text = []
         for companion, type_data in companions.items():
             # Create a frame to contain the companion button and radio buttons
             frame = QFrame()
@@ -35,9 +38,12 @@ class CompanionManager(QWidget):
             frame.setLayout(frame_layout)
 
             companion_button = QPushButton(companion)
-            companion_button.setStyleSheet("background-color: #9C9C9C; color: black;")
+            companion_button.setStyleSheet("background-color: #9C9C9C; color: black;") # Button color grey
             companion_button.setEnabled(True)
             companion_button.setVisible(True)
+            companion_button.clicked.connect(self.companion_button_click)
+            companions_text.append(companion_button.text())
+
             # Add button widget to layout
             frame_layout.addWidget(companion_button)
             # self.right_layout.addWidget(companion_button)
@@ -46,29 +52,63 @@ class CompanionManager(QWidget):
             
             # Store the frame and its type data
             companion_buttons[frame] = type_data
-            # companion_buttons[companion_button] = type_data
-        print("Companion Buttons: ", companion_buttons)
-        
-        return companion_buttons
+            companion_buttons_list.append(companion_button)
+
+        return companion_buttons, companion_buttons_list
+
+
+    def update_companion_buttons(self, button, sub_series_path):
+        # Join current path from tree and series buttons to the current companion button.
+        full_path = os.path.join(sub_series_path, button.text()) 
+        if os.path.exists(full_path): # If built path is found
+            button.setStyleSheet("background-color: #0B8ED4; color: white") # Folder exists, button is blue.
+        else: # Path not found
+            button.setStyleSheet("background-color: #C63F3F; color: white") # No folder found, button is red.
+
 
     # Handles creation of radio buttons below each associated companion button
-    def add_radio_buttons(self, companion_buttons):
-        for frame, type_data in companion_buttons.items():
+    def create_radio_buttons(self, companion_buttons):
+        for frame, data in companion_buttons.items():
             button_group = QButtonGroup(self)  # Group radio buttons together
             
-            for entry in type_data:
-                radio_button = QRadioButton(entry['type-variable'])
+            # Iterate over each type-variable and create corresponding radio buttons
+            for type_var in data['type-variable']:
+                radio_button = QRadioButton(type_var)
                 button_group.addButton(radio_button)
 
                 # Add radio button to the frame layout
                 hbox_layout = QHBoxLayout()
                 hbox_layout.addWidget(radio_button)
                 frame.layout().addLayout(hbox_layout)
-        
-        
-    # Handles creation of file  image file drop widgets
-    def create_file_input_widgets(self, companion_data):
+                radio_button.clicked.connect(self.type_button_click)
 
+
+    # Handles creation of uni buttons for enabling of unique uni part groups
+    def create_uni_input_widgets(self, companion_data, clicked_radio):
+        print("Companion Dict Data: ", companion_data)
+        print("Clicked button ID: ", clicked_radio)
+
+        # Create a horizontal layout to contain the UNI buttons
+        uni_button_layout = QVBoxLayout()
+            # Create and add UNI buttons to the layout
+        for uni_data in companion_data:
+            for entry in uni_data:
+                uni_button = QPushButton(entry)
+                uni_button.setStyleSheet("background-color: #9C9C9C; color: black;")
+                uni_button_layout.addWidget(uni_button)
+                # uni_button.clicked.connect(self.uni_button_click)
+
+        # Insert the UNI buttons layout right after the clicked radio button
+        parent_layout = clicked_radio.parent().layout()
+        index = parent_layout.indexOf(clicked_radio)
+        parent_layout.insertLayout(index + 1, uni_button_layout)
+
+
+    # Handles creation of file image file drop widgets
+    def create_custom_file_input_widgets(self, companion_data):
+        print("Companion Dict Data: ", companion_data)        
+
+        return
         # Create drop areas for each file input
         for companion_name in companion_data.keys():
             # Create a label for each file input
@@ -85,16 +125,7 @@ class CompanionManager(QWidget):
             self.layout.addWidget(drop_area)
 
 
-    def create_type_variable_widgets(self, uni_centers_list):
-
-        print("\n Creating UNI Center Widgets\n")
-        group_box = QButtonGroup(self)
-        for center in uni_centers_list:
-            print("UNI Center: ", center)
-            radio_button = QRadioButton(center)
-            group_box.addButton(radio_button)
-            self.layout.addWidget(radio_button)
-
+    # Handle File drop events
     def eventFilter(self, source, event):
         if event.type() == event.DragEnter and source.property("companion_name"):
             if event.mimeData().hasUrls():

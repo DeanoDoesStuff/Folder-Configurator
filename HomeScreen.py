@@ -10,7 +10,7 @@ from SkuBuilder import SkuBuilder
 from CompanionManager import CompanionManager
 from SeriesManager import SeriesManager
 from Utility import Utility
-from Companions import companion_dict_data
+from Companions import companion_dict_data, uni_part_groups
 
 class HomeScreen(QMainWindow):
     def __init__(self, root_dir, folder_type, parent=None):
@@ -62,8 +62,11 @@ class HomeScreen(QMainWindow):
         self.splitter.addWidget(self.middle_scroll_area)
 
         # Initialize mmy path
+        # TODO refactor path code to maintain only one variable to be updated, instead of moving the data from var to var
         self.current_mmy_path = ""
         self.parent_path = ""
+        self.series_path = ""
+        self.sub_series_path = ""
         # Load series data from CSV file
         self.series_data = Utility.load_series_data('Configs/SERIES_CONFIG.csv')
 
@@ -125,9 +128,6 @@ class HomeScreen(QMainWindow):
         self.right_layout = QVBoxLayout()
         self.right_widget.setLayout(self.right_layout)
 
-        #self.sku_label = QLabel("Current SKU: ")
-        #self.right_layout.addWidget(self.sku_label)
-
         self.splitter.addWidget(self.right_widget)
 
         # Set initial sizes for the splitter (optional)
@@ -150,7 +150,10 @@ class HomeScreen(QMainWindow):
         # Instantiate CompanionManager
         self.companion_manager = CompanionManager()
         self.right_layout.addWidget(self.companion_manager)
-    
+
+        # Initialize Companion Data
+        self.companion_buttons = {}
+
 
     # Handles signals from items clicked in Folder Tree
     def handle_tree_item_click(self, item):
@@ -374,7 +377,7 @@ class HomeScreen(QMainWindow):
         
         
         # Calls Helper function to handle sku updates,
-        self.series_sku( clicked_button)
+        self.series_sku(clicked_button)
 
         new_folder_path = os.path.join(self.parent_path, series)
         # Check if newly created path already exists in the directory
@@ -402,6 +405,13 @@ class HomeScreen(QMainWindow):
             mmy_sku_num = mmy_sku_num[:-1]
         self.update_kit_sku(clicked_button, mmy_sku_num)
 
+    # Helper function to build out companio sku data
+    def companion_sku(self, clicked_companion):
+        mmy_sku_num = self.sku_label.text().split(': ')[1]
+        while len(mmy_sku_num) > 14:
+            mmy_sku_num = mmy_sku_num[:-1]
+        self.update_companion_sku(clicked_companion, mmy_sku_num)
+
 
     # Handles logic for updating kit sku variable displayed in the right pane
     def update_kit_sku(self, clicked_button, mmy_sku_num):
@@ -421,18 +431,37 @@ class HomeScreen(QMainWindow):
         current_sku = "".join(current_sku_num + series_sku[0]) # Joins base SKU with extracted data
         self.update_sku_label(current_sku) # Updates the display widget with newly build SKU
 
+    # TODO wip trying to finish out companion sku funtionality
+    def update_companion_sku(self, clicked_companion, mmy_sku_num):
+        print("SKU Length: ", len(mmy_sku_num))
+        if len(mmy_sku_num) == 14:
+            companion_sku = SkuBuilder.process_kit_sku(clicked_companion)
 
-    # Handles logic for Series Child button clicks
+        else:
+            companion_sku = SkuBuilder.process_kit_sku(clicked_companion)
+            full_sku = mmy_sku_num + "-"
+            full_sku = mmy_sku_num + companion_sku[0]
+            print("Full SKU: ", full_sku)
+            self.update_sku_label(full_sku)
+
+            return
+        
+        current_sku_num = mmy_sku_num
+        current_sku_num = current_sku_num + "-"
+        current_sku = "".join(current_sku_num + companion_sku[0])
+        print("Current SKU: ", current_sku)
+        self.update_sku_label(current_sku)
+
+    """
+    This function handles events for series button clicks
+    When no folders for the specified info exist if a series is active and the child button is clicked
+    Folders for that specific series will be created in sequence. The button is then active
+    Active buttons begin the processes of asset inputs into created folders on the right hand panel.
+    """
     def handle_child_button_click(self):
-        """
-        This function handles events for series button clicks
-        When no folders for the specified info exist if a series is active and the child button is clicked
-        Folders for that specific series will be created in sequence. The button is then active
-        Active buttons begin the processes of asset inputs into created folders on the right hand panel.
-        """
+
         # TODO create logic to handle creation of uni part groups
         # TODO create logic to handle storing of misc assets -- instructions, bend sheets, 
-        # TODO create button logic to allow quick edits of config files when right clicking sub series button
         if self.active_series_button:
             series = self.active_series_button.text()
             clicked_child = self.sender()
@@ -440,58 +469,98 @@ class HomeScreen(QMainWindow):
             folders_created = False
 
             # Function calls for building, creating, and reading kit sku config files
-            kit_sku_config = SeriesManager.handle_kit_config(self, series, kit_bundle)
+            SeriesManager.handle_kit_config(self, series, kit_bundle)
 
             # Update active child state
             SeriesManager.active_child_button(self, clicked_child, series)
             # Calls function to format sub series, returns formatted pieces in a list
             sub_series_pieces = SeriesManager.handle_sub_series_pieces(self, kit_bundle)
 
-            sub_series_combo = tuple(sub_series_pieces) # Convert the list to a tuple before accessing the dictionary
-            series_data = companion_dict_data.get(series, {}) # Check if series exists
-            companions = series_data.get(sub_series_combo, {}) # Access companions
-            print("Dict Extracted Companions: ", companions)
-            # Calls function to create companion button widgets
-            companion_buttons = CompanionManager.create_companion_buttons(self, companions)
-
-            # Calls function to create companion based radio buttons
-            CompanionManager.add_radio_buttons(self, companion_buttons)
-
-            # TODO create logic to detect if a custom or uni type has been selected
-            
             # Create folders if none exist
-            series_path = os.path.join(self.parent_path, series)
+            self.series_path = os.path.join(self.parent_path, series)
             (location, fabrication,
               material, package) = SeriesManager.create_sub_series_folders(self, sub_series_pieces)
             
-            sub_series_path = series_path
-            for folder in sub_series_pieces:
-                sub_series_path = os.path.join(sub_series_path, folder)
+            self.sub_series_path = self.series_path
             
+            for folder in sub_series_pieces:
+                self.sub_series_path = os.path.join(self.sub_series_path, folder)
+
                 # Extracts sku data and update the current sku
-                 # Calls Helper function to handle sku updates,
+                # Calls Helper function to handle sku updates,
                 self.sub_series_sku(clicked_child)
 
                 # Call create sub series function while still in sub series list loop
-                folders_created = SeriesManager.create_sub_series(self, sub_series_path)
+                folders_created = SeriesManager.create_sub_series(self, self.sub_series_path)
                 # TODO create logic to store misc assets as well as specific custom image assets
-
 
             if folders_created == True:
                 QMessageBox.information(self, "Success",
                                         f"Folders '{location}'; '{fabrication}'; '{material}'; '{package}'; Succesfully Created!")
 
+            # Handle companion logic
+            sub_series_combo = tuple(sub_series_pieces) # Convert the list to a tuple before accessing the dictionary
+            series_data = companion_dict_data.get(series, {}) # Check if series exists
+            companions = series_data.get(sub_series_combo, {}) # Access companions
+            # Calls function to create companion button widgets
+            self.companion_buttons, companion_buttons_list = CompanionManager.create_companion_buttons(self, companions)
+            for button in companion_buttons_list:
+                CompanionManager.update_companion_buttons(self, button, self.sub_series_path)
+            # Calls function to create companion based radio buttons
+            CompanionManager.create_radio_buttons(self, self.companion_buttons)
+
 
     # Handles companion button click logic.
     def companion_button_click(self):
-        # TODO activates a companion button when clicked. 
 
-        # TODO Begin building companion sku to add to product sku for Tulip Integration
-        pass
+        clicked_companion = self.sender()
+        companion = clicked_companion.text()
+
+        full_path = os.path.join(self.sub_series_path, companion)
+        clicked_companion.setStyleSheet("background-color: #2E982B; color: white;") # Active button - highlight green.
+
+        # Calls Helper function to handle sku updates,
+        self.companion_sku(clicked_companion)
+
+        # Check if newly created path already exists in the directory
+        if not os.path.exists(full_path): # If no path found create the new folder path
+            print("No folder exists yet for this series")
+            if self.folder_manager.create_folder(full_path):
+                QMessageBox.information(self, "Success", f"Series folder '{companion}' created successfully.")
+                clicked_companion.setStyleSheet("background-color: #2E982B; color: white;")  # Change to light green
+            else: # error handling with message.
+                QMessageBox.warning(self, "Error", f"Failed to create series folder '{companion}'.")
+        return
+        
 
     # Handles type-variable radio button click logic.
     def type_button_click(self):
-        # TODO when custom selected generate image input widgets.
+        # TODO disable button click if no Companion is selected
+        # Handle button click signals
+        clicked_radio = self.sender()
+        type_var = clicked_radio.text()
+        if "=" in type_var:
+            type_var_tuple = type_var.split("=")
+            type_var_sku = type_var_tuple[0]
+            print("Type SKU: ", type_var_sku)
 
-        # TODO else, generate uni buttons.
-        pass
+        if type_var_sku == "C":
+            print("Custom selected")
+            CompanionManager.create_custom_file_input_widgets(self, companion_dict_data)
+        else:
+            print("UNI Selected")
+            # Grab UNI key portion of the current sku to pass into UNI companion dictionary as a key
+            mmy_sku_num = self.sku_label.text().split(': ')[1]
+            desired_length = 8 # Specific length of the expected key
+
+            # Keep only the last characters until the specified length is reached
+            uni_key = ''.join(mmy_sku_num[-desired_length:])
+            print("UNI KEY: ", uni_key)
+
+            # Check if current UNI Key exists in dictionary
+            if uni_part_groups.get(uni_key) is not None:
+                # Key found, pass the contents to now create uni input button widgets
+                CompanionManager.create_uni_input_widgets(self, uni_part_groups.get(uni_key), clicked_radio)
+            else:
+                # # No key found, kill the process.
+                print("No matching key found")

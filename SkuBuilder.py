@@ -43,6 +43,8 @@ class SkuBuilder:
             current_sku = id_part # Assign the returned variable to the formatted string id_part
         return current_sku # Return id data extracted from the button
 
+    # Handle processing of product SKU -- MMY and KIT SKU combined
+
     def process_product_sku(clicked_button):
         # Initilize the variables used in this function
         current_sku = ""
@@ -63,3 +65,17 @@ class SkuBuilder:
         return current_sku
         
 
+
+    def format_sku(self, sku_label):
+        
+        sku_str = sku_label.text()
+        if ":" in sku_str:
+            sku_tuple = sku_str.split(":")
+            print("SKU Split: ", sku_tuple)
+            sku_str = sku_tuple[1]
+            print("SKU String: ", sku_str)
+        return sku_str
+        sku_len = len(sku_str)
+        print("SKU Len: ", sku_len)
+
+        

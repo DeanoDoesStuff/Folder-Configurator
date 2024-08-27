@@ -1,1 +1,1 @@
-# Move-Folder-Configurator
+# Folder-Configurator
