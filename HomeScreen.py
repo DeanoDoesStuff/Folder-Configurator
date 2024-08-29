@@ -168,10 +168,11 @@ class HomeScreen(QMainWindow):
             self.update_folder_type(item)
             current_mmy_path = self.tree_widget.get_item_path(item)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
-            series_data = self.series_manager.update_series_button_states(item)
+            self.series_data = self.series_manager.update_series_button_states(item)
 
             self.series_manager.enable_child_states()
-            self.series_manager.update_child_button_states(series_data)
+            
+            self.series_manager.update_child_button_states(self.series_data)
             # Re-enable tree widget if at depth less than 3
             self.tree_widget.setDisabled(False)
             self.lock_tree_beyond_mmy(item, depth)
@@ -472,6 +473,7 @@ class HomeScreen(QMainWindow):
             SeriesManager.handle_kit_config(self, series, kit_bundle)
 
             # Update active child state
+            self.series_manager.update_child_button_states(self.series_data)
             SeriesManager.active_child_button(self, clicked_child, series)
             # Calls function to format sub series, returns formatted pieces in a list
             sub_series_pieces = SeriesManager.handle_sub_series_pieces(self, kit_bundle)
@@ -480,7 +482,6 @@ class HomeScreen(QMainWindow):
             self.series_path = os.path.join(self.parent_path, series)
             (location, fabrication,
               material, package) = SeriesManager.create_sub_series_folders(self, sub_series_pieces)
-            
             self.sub_series_path = self.series_path
             
             for folder in sub_series_pieces:
@@ -492,16 +493,20 @@ class HomeScreen(QMainWindow):
 
                 # Call create sub series function while still in sub series list loop
                 folders_created = SeriesManager.create_sub_series(self, self.sub_series_path)
+                
                 # TODO create logic to store misc assets as well as specific custom image assets
+                SeriesManager.create_support_assets(self, self.sub_series_path)
 
             if folders_created == True:
                 QMessageBox.information(self, "Success",
                                         f"Folders '{location}'; '{fabrication}'; '{material}'; '{package}'; Succesfully Created!")
 
+
             # Handle companion logic
-            sub_series_combo = tuple(sub_series_pieces) # Convert the list to a tuple before accessing the dictionary
+            self.sub_series_combo = tuple(sub_series_pieces) # Convert the list to a tuple before accessing the dictionary
             series_data = companion_dict_data.get(series, {}) # Check if series exists
-            companions = series_data.get(sub_series_combo, {}) # Access companions
+            companions = series_data.get(self.sub_series_combo, {}) # Access companions
+            print("Companions: ", companions)
             # Calls function to create companion button widgets
             self.companion_buttons, companion_buttons_list = CompanionManager.create_companion_buttons(self, companions)
             for button in companion_buttons_list:
@@ -514,9 +519,9 @@ class HomeScreen(QMainWindow):
     def companion_button_click(self):
 
         clicked_companion = self.sender()
-        companion = clicked_companion.text()
+        self.companion = clicked_companion.text()
 
-        full_path = os.path.join(self.sub_series_path, companion)
+        full_path = os.path.join(self.sub_series_path, self.companion)
         clicked_companion.setStyleSheet("background-color: #2E982B; color: white;") # Active button - highlight green.
 
         # Calls Helper function to handle sku updates,
@@ -526,10 +531,10 @@ class HomeScreen(QMainWindow):
         if not os.path.exists(full_path): # If no path found create the new folder path
             print("No folder exists yet for this series")
             if self.folder_manager.create_folder(full_path):
-                QMessageBox.information(self, "Success", f"Series folder '{companion}' created successfully.")
+                QMessageBox.information(self, "Success", f"Series folder '{self.companion}' created successfully.")
                 clicked_companion.setStyleSheet("background-color: #2E982B; color: white;")  # Change to light green
             else: # error handling with message.
-                QMessageBox.warning(self, "Error", f"Failed to create series folder '{companion}'.")
+                QMessageBox.warning(self, "Error", f"Failed to create series folder '{self.companion}'.")
         return
         
 
@@ -546,7 +551,9 @@ class HomeScreen(QMainWindow):
 
         if type_var_sku == "C":
             print("Custom selected")
-            CompanionManager.create_custom_file_input_widgets(self, companion_dict_data)
+
+            CompanionManager.create_custom_file_input_widgets(self, companion_dict_data,
+                                                               self.companion, self.sub_series_combo, clicked_radio)
         else:
             print("UNI Selected")
             # Grab UNI key portion of the current sku to pass into UNI companion dictionary as a key
@@ -560,7 +567,19 @@ class HomeScreen(QMainWindow):
             # Check if current UNI Key exists in dictionary
             if uni_part_groups.get(uni_key) is not None:
                 # Key found, pass the contents to now create uni input button widgets
-                CompanionManager.create_uni_input_widgets(self, uni_part_groups.get(uni_key), clicked_radio)
+                companion_data = uni_part_groups.get(uni_key)
+                self.uni_buttons = CompanionManager.create_uni_input_widgets(self, companion_data,
+                                                                             clicked_radio)
             else:
                 # # No key found, kill the process.
                 print("No matching key found")
+
+    def uni_button_click(self):
+        # TODO build out function to handle UNI button clicks here...
+        clicked_uni = self.sender()
+        uni_button_text = clicked_uni.text()
+        print("Uni Button Text: ", uni_button_text)
+        CompanionManager.update_uni_button(self, clicked_uni)
+
+        clicked_uni.setStyleSheet("background-color: #2E982B; color: white;") # Active -- Green
+        

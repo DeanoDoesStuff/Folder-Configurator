@@ -17,8 +17,6 @@ class CompanionManager(QWidget):
         self.setLayout(self.right_layout)
         self.setAcceptDrops(True)  # Enable drag-and-drop for this widget
 
-        # self.uni_part_group_buttons = {}
-        
 
     # Handles creation of Companion Buttons to the right layout
     def create_companion_buttons(self, companions):
@@ -28,14 +26,17 @@ class CompanionManager(QWidget):
             if widget is not None:
                 widget.setParent(None)  # Remove widget from the layout
                 widget.deleteLater()    # Schedule it for deletion
+
         companion_buttons = {}
         companion_buttons_list = []
         companions_text = []
+
         for companion, type_data in companions.items():
             # Create a frame to contain the companion button and radio buttons
-            frame = QFrame()
-            frame_layout = QVBoxLayout()
-            frame.setLayout(frame_layout)
+            companion_container = QFrame()
+            companion_container.setFrameShape(QFrame.StyledPanel)
+            container_layout = QVBoxLayout()
+            companion_container.setLayout(container_layout)
 
             companion_button = QPushButton(companion)
             companion_button.setStyleSheet("background-color: #9C9C9C; color: black;") # Button color grey
@@ -45,13 +46,13 @@ class CompanionManager(QWidget):
             companions_text.append(companion_button.text())
 
             # Add button widget to layout
-            frame_layout.addWidget(companion_button)
+            container_layout.addWidget(companion_button)
             # self.right_layout.addWidget(companion_button)
             # Add frame to the main layout
-            self.right_layout.addWidget(frame)
+            self.right_layout.addWidget(companion_container)
             
             # Store the frame and its type data
-            companion_buttons[frame] = type_data
+            companion_buttons[companion_container] = type_data
             companion_buttons_list.append(companion_button)
 
         return companion_buttons, companion_buttons_list
@@ -68,7 +69,7 @@ class CompanionManager(QWidget):
 
     # Handles creation of radio buttons below each associated companion button
     def create_radio_buttons(self, companion_buttons):
-        for frame, data in companion_buttons.items():
+        for container, data in companion_buttons.items():
             button_group = QButtonGroup(self)  # Group radio buttons together
             
             # Iterate over each type-variable and create corresponding radio buttons
@@ -79,24 +80,26 @@ class CompanionManager(QWidget):
                 # Add radio button to the frame layout
                 hbox_layout = QHBoxLayout()
                 hbox_layout.addWidget(radio_button)
-                frame.layout().addLayout(hbox_layout)
+                container.layout().addLayout(hbox_layout)
                 radio_button.clicked.connect(self.type_button_click)
 
 
     # Handles creation of uni buttons for enabling of unique uni part groups
     def create_uni_input_widgets(self, companion_data, clicked_radio):
-        print("Companion Dict Data: ", companion_data)
-        print("Clicked button ID: ", clicked_radio)
-
+        # TODO BUG when input changes from uni to custom and vice-versa the system needs to override the currently displayed inputs
+        #print("Companion Dict Data: ", companion_data)
+        print("Clicked Radio: ", clicked_radio.text())
         # Create a horizontal layout to contain the UNI buttons
         uni_button_layout = QVBoxLayout()
             # Create and add UNI buttons to the layout
         for uni_data in companion_data:
-            for entry in uni_data:
-                uni_button = QPushButton(entry)
-                uni_button.setStyleSheet("background-color: #9C9C9C; color: black;")
-                uni_button_layout.addWidget(uni_button)
-                # uni_button.clicked.connect(self.uni_button_click)
+            uni_button_text = "->".join(uni_data)
+
+            # for entry in uni_data:
+            uni_button = QPushButton(uni_button_text)
+            uni_button.setStyleSheet("background-color: #9C9C9C; color: black;")
+            uni_button_layout.addWidget(uni_button)
+            uni_button.clicked.connect(self.uni_button_click)
 
         # Insert the UNI buttons layout right after the clicked radio button
         parent_layout = clicked_radio.parent().layout()
@@ -104,25 +107,66 @@ class CompanionManager(QWidget):
         parent_layout.insertLayout(index + 1, uni_button_layout)
 
 
-    # Handles creation of file image file drop widgets
-    def create_custom_file_input_widgets(self, companion_data):
-        print("Companion Dict Data: ", companion_data)        
+    def update_uni_button(self, clicked_uni):
+        print("Update UNI Button: ", clicked_uni.text())
+        # TODO build logic to check status of uni part groups -- folder? file? .txt??
 
-        return
-        # Create drop areas for each file input
-        for companion_name in companion_data.keys():
-            # Create a label for each file input
-            label = QLabel(companion_name)
-            self.layout.addWidget(label)
-            
-            # Create a drop area label
-            drop_area = QLabel("Drop image here")
-            drop_area.setStyleSheet("border: 2px dashed gray; padding: 10px;")
-            drop_area.setAlignment(Qt.AlignCenter)
-            drop_area.setFixedSize(200, 200)  # Adjust size as needed
-            drop_area.setProperty("companion_name", companion_name)
-            drop_area.installEventFilter(self)
-            self.layout.addWidget(drop_area)
+
+    # Handles creation of file image file drop widgets
+    def create_custom_file_input_widgets(self, companion_data, companion_name, sub_series_button, clicked_radio):
+        print("\nCreating Custom File Inputs")
+        print("Sub Series Data: ", sub_series_button)
+
+        # Create layouts for labels and drop areas
+        label_layout = QHBoxLayout()
+        hbox_layout = QHBoxLayout()
+
+        for series, sub_series_data in companion_data.items():
+            print("Series: ", series)
+            for sub_series, companions in sub_series_data.items():
+                if sub_series == sub_series_button:  # Only display sub series that match current button input
+                    print("Sub Series: ", sub_series)
+                    for comp_name, details in companions.items():
+                        print(f"Comparing Name: {comp_name} to Name: {companion_name}")
+                        if comp_name == companion_name:
+                            print(f"\nCompanion {comp_name} match to {companion_name}")
+
+                            if 'C=CUSTOM' in details['type-variable']:
+                                print("Building input widgets")
+                                for selection in details['selections']:
+                                    print("Selection: ", selection)
+                                    selection_label = QLabel(f"Selection: {selection['selection_1']} / {selection['selection_2']}")
+
+                                    # Add the label to the label layout
+                                    label_layout.addWidget(selection_label)
+
+                                    # Create a drop area label
+                                    drop_area = QLabel("Drop image here")
+                                    drop_area.setStyleSheet("border: 2px dashed gray; padding: 10px;")
+                                    drop_area.setAlignment(Qt.AlignCenter)
+                                    drop_area.setFixedSize(105, 105)  # Adjust size as needed
+                                    drop_area.setProperty("companion_name", comp_name)
+                                    drop_area.installEventFilter(self)
+
+                                    # Add the drop area to the horizontal layout
+                                    hbox_layout.addWidget(drop_area)
+
+                                # Find the correct parent layout to insert the label and drop area
+                                parent_layout = clicked_radio.parent().layout()
+                                index = parent_layout.indexOf(clicked_radio)
+
+                                # Insert the label layout first (optional, if you want the labels above the drop areas)
+                                parent_layout.insertLayout(index + 1, label_layout)
+                                # Insert the drop areas layout directly beneath the radio button
+                                parent_layout.insertLayout(index + 2, hbox_layout)
+
+                            break  # Break out of the loop if a match is found
+
+        
+        # Insert the Custom Input drop layout right after the clicked radio button
+        parent_layout = clicked_radio.parent().layout()
+        index = parent_layout.indexOf(clicked_radio)
+        parent_layout.insertLayout(index + 1, hbox_layout)
 
 
     # Handle File drop events

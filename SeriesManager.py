@@ -62,37 +62,44 @@ class SeriesManager:
             pass
     
     
-    # Handle enableing child buttons states when conditions are met
+    # Handle enabling child buttons states when conditions are met
     def enable_child_states(self):
         for button in self.child_buttons:
             button.setVisible(True)
             button.setEnabled(True)
     
 
-    # Handles sub series button updates
     def update_child_button_states(self, series_data):
-        # BUG BIG ISSUE first kit sku button at every parent series is grey when it should be red!!!
-        # Iterate through each sereis and its state in series_data
         for series, parent_state in series_data:
-            if series in self.kit_sku_dict:
-                combined_rows = self.kit_sku_dict[series]
-                current_row_string_list = self.format_rows(combined_rows, series)
-                # TODO refactor this nested for loop into its own function.
-                for child_button in self.child_buttons:
-                    #print("Current Child button: ", child_button.text())
-                    child_str = self.format_child_strings(child_button.text(), series)
-                    #print("Formatted Child String: ", child_str)
-                    if child_str in current_row_string_list:
-                        #print("Child String match! ")
-                        if parent_state == "blue":
-                            #print("Updating Button for Series: ", series, " : ", child_button.text())
-                            child_button.setStyleSheet("background-color: #C63F3F; color: white")
-                        elif parent_state == "red":
-                            child_button.setStyleSheet("background-color: #9C9C9C; color: white")
+            combined_rows = self.kit_sku_dict.get(series, [])
+            current_row_string_list = self.format_rows(combined_rows, series)
+
+            for row in current_row_string_list:
+                product_sku_path = self.construct_product_sku_path(row)
+                if os.path.exists(product_sku_path):
+                    self.update_button_states(series, row, found=True)
+                else:
+                    self.update_button_states(series, row, found=False)
+
+
+    def construct_product_sku_path(self, row):
+        kit_path_pieces = self.handle_sub_series_pieces(row)
+        kit_path_pieces = "\\".join(kit_path_pieces)
+        return os.path.join(self.current_mmy_path, kit_path_pieces)
+    
+
+    def update_button_states(self, series, row, found):
+        child_buttons_list = [] # Initialize child buttons list
+        for child_button in self.child_buttons:
+            child_buttons_list.append(child_button.text()) # Store looped child buttons into list for reference later
+            child_button_txt = f"{series}->{child_button.text()}"
+            if child_button_txt == row:
+                color = "#67a3db" if found else "#ff2e2e"
+                child_button.setStyleSheet(f"background-color: {color}; color: white")
 
 
     def active_child_button(self, clicked_child, series):
-        clicked_child.setStyleSheet("background-color: #2E982B; color: white;")
+        clicked_child.setStyleSheet("background-color: #2E982B; color: white;") # Button Active -- Setting Green
         # BUG after updating style when a new child is clicked the color of first,
         #  needs to be set to blue
     
@@ -131,6 +138,16 @@ class SeriesManager:
             return True
         else:
             return False
+        
+    
+    def create_support_assets(self, sub_series_path):
+        support_assets_path = os.path.join(sub_series_path, "SUPPORT ASSETS")
+        if not os.path.exists(support_assets_path):
+            os.makedirs(support_assets_path)
+            return support_assets_path
+        else:
+            return support_assets_path
+
 
     # Handles processing of Kit SKU config files 
     def handle_kit_config(self, series, kit_bundle):
