@@ -70,6 +70,7 @@ class HomeScreen(QMainWindow):
         # Load series data from CSV file
         self.series_data = Utility.load_series_data('Configs/SERIES_CONFIG.csv')
 
+        self.kit_dict = {}
         # Initialize kit sku dictionary
         self.kit_sku_dict = {}
         
@@ -169,10 +170,12 @@ class HomeScreen(QMainWindow):
             current_mmy_path = self.tree_widget.get_item_path(item)
             self.series_manager.enable_series_buttons(True, current_mmy_path)
             self.series_data = self.series_manager.update_series_button_states(item)
-
+            print("Series Data: ", self.series_data)
             self.series_manager.enable_child_states()
-            
-            self.series_manager.update_child_button_states(self.series_data)
+
+            for button_id, kit in self.kit_dict.items():
+                print("Current Kit: ", kit)
+                self.series_manager.update_child_button(button_id, kit)
             # Re-enable tree widget if at depth less than 3
             self.tree_widget.setDisabled(False)
             self.lock_tree_beyond_mmy(item, depth)
@@ -333,27 +336,36 @@ class HomeScreen(QMainWindow):
     def create_child_buttons(self, series, series_info, series_layout):
         # Loop through extracted csv rows and set button layout and visuals
         for row in self.get_combined_row_data(series, series_info): # Call function to pass row string to build button string info
-            child_button = QPushButton(row)
-            child_button.setStyleSheet("background-color: #9C9C9C; color: black;") # Inactive -- Grey
+            #print("Child Row: ", row)
+            self.child_button = QPushButton(row)
+            self.child_button.setStyleSheet("background-color: #9C9C9C; color: black;") # Inactive -- Grey
             # Initially hide buttons. Set visible when condition is met
-            child_button.setEnabled(False)
-            child_button.setVisible(False)
-            child_button.clicked.connect(self.handle_child_button_click)
-            series_layout.addWidget(child_button)
-            # BUG fix the parent and child buttons appending issue. 
-            self.child_buttons.append(child_button)
-   
+            self.child_button.setEnabled(False)
+            self.child_button.setVisible(False)
+            self.child_button.clicked.connect(self.handle_child_button_click)
+
+            # Combine parent series text and child button text
+            kit_text = f"{series}->{row}"
+
+            # Populate the dictionary with the child button as key and the combined text as value
+            self.kit_dict[self.child_button] = kit_text
+            print("Kit Dictionary: ", self.kit_dict)
+
+            series_layout.addWidget(self.child_button)
+            self.child_buttons.append(self.child_button)
+
+
     # Handles string concat of extracted series config row data
     def get_combined_row_data(self, series, series_info):
+        print("Series: ", series)
+        print("Series Data: ", series_info)
         self.combined_rows = []
-        
-        # Loop through rows and extract data into child buttons
         for row in series_info:
             combined_row = "->".join(row)
-            # print("Combined Row: ", combined_row)
+            #print("Combined Row: ", combined_row)
             self.combined_rows.append(combined_row)
-
         return self.combined_rows
+
 
     # Handle dictionary to hold Series as keys and child buttons as values
     def kit_sku_dictionary(self, series, combined_rows):
@@ -473,7 +485,12 @@ class HomeScreen(QMainWindow):
             SeriesManager.handle_kit_config(self, series, kit_bundle)
 
             # Update active child state
-            self.series_manager.update_child_button_states(self.series_data)
+            # TODO update to new function set
+            for button_id, kit in self.kit_dict.items():
+                print("Current Kit: ", kit)
+                self.series_manager.update_child_button(button_id, kit)
+            # self.series_manager.update_child_button_states(self.series_data)
+
             SeriesManager.active_child_button(self, clicked_child, series)
             # Calls function to format sub series, returns formatted pieces in a list
             sub_series_pieces = SeriesManager.handle_sub_series_pieces(self, kit_bundle)
